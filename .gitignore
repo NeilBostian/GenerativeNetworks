@@ -104,5 +104,6 @@ venv.bak/
 .mypy_cache/
 
 .vscode/
-.MNIST_data
+.MNIST_data/
+.celeb_data/
 bin/
