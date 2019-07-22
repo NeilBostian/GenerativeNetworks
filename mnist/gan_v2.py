@@ -160,10 +160,10 @@ class GanModel():
         sess = self.sess
 
         summaries = tf.summary.merge_all()
-        writer = tf.summary.FileWriter('./tb', sess.graph)
+        writer = tf.summary.FileWriter('bin/tb', sess.graph)
         
-        if not os.path.exists('out/'):
-            os.makedirs('out/')
+        if not os.path.exists('bin/gen'):
+            os.makedirs('bin/gen')
 
         i = 0
 
@@ -200,7 +200,7 @@ class GanModel():
                 samples = sess.run(genSamples, feed_dict={z: sample_z(16, self._c_.z_dim)})
 
                 fig = plot(samples)
-                plt.savefig(f'out/{str(i).zfill(3)}.png', bbox_inches='tight')
+                plt.savefig(f'bin/gen/{str(i).zfill(3)}.png', bbox_inches='tight')
                 i += 1
         plt.close(fig)
 
