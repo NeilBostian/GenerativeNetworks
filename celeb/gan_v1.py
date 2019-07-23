@@ -60,11 +60,12 @@ class GanModel():
             apply_w2b2 = tf.squeeze(tf.matmul(tf.expand_dims(apply_activation, 0), w2), 0) + b2
             return (apply_w2b2, [w1, w2], [b1, b2])
 
-    def _fully_connect(self, inputs, num_outputs):
+    def _fully_connect(self, inputs, num_outputs, name_prefix=None, out_size=-1):
         """
         Fully connects all input channels using matrix dot product
         `inputs` must have length >= 2
         `num_outputs` must be >= 1
+        `out_size` is the size of each output node
 
         Returns: (outputs, weights, biases)
         """
@@ -72,11 +73,13 @@ class GanModel():
         weights = list()
         biases = list()
 
+        name_prefix = name_prefix or 'fc'
+
         for i in range(num_outputs):
-            with tf.name_scope('fc_' + str(i)):
+            with tf.name_scope(f'{name_prefix}_{i}'):
                 stack = tf.stack(inputs)
                 mean = tf.reduce_mean(stack, 0)
-                (t_out, wts, bs) = self._weight(mean)
+                (t_out, wts, bs) = self._weight(mean, out_size=out_size)
                 outputs.append(t_out)
                 weights.extend(wts)
                 biases.extend(bs)
@@ -119,15 +122,70 @@ class GanModel():
             all_biases.extend(fc_biases)
 
             with tf.name_scope('merge_fc'):
-                transpose = [tf.squeeze(x) for x in fc_channels]
-                stacked_output = tf.stack(transpose)
-                self._tf.generator_output = tf.reshape(stacked_output, self.shape)
+                self._tf.g_output = tf.reshape(tf.stack(fc_channels), self.shape)
 
-            self._tf.generator_weights = all_weights
-            self._tf.generator_biases = all_biases
+            self._tf.g_weights = all_weights
+            self._tf.g_biases = all_biases
 
     def _phase_2_create_discriminator_activations(self):
-        pass
+        def discriminate(t_in):
+            """
+            Takes input tensor of shape `self.shape`, and discriminates whether it is a real image or not
+            Returns tuple(t_out, weights, biases)                
+            """
+
+            with tf.name_scope('split_channels'):
+                flat_input = tf.reshape(input, [self.flat_dim, self.num_color_channels])
+                split_channels = [tf.reshape(x, [self.flat_dim]) for x in tf.split(flat_input, self.num_color_channels, axis=1)]
+            
+                channels = [tf.reduce_mean(flat_input, 1)] # greyscale as the mean of all 3 color channels
+                channels.extend(split_channels)
+            
+            out_channels = list()
+            all_weights = list()
+            all_biases = list()
+
+            for (in_channel, it) in zip(channels, range(len(channels))):
+                cname = 'channel_' + str(it)
+
+                if it == 0: cname = 'greyscale'
+                elif it == 1: cname = 'red'
+                elif it == 2: cname = 'green'
+                elif it == 3: cname = 'blue'
+
+                with tf.name_scope(cname):
+                    (out_channel, weights, biases) = self._weight(in_channel)
+
+                    out_channels.append(out_channel)
+                    all_weights.extend(weights)
+                    all_biases.extend(biases)
+
+            (fc_channels, fc_weights, fc_biases) = self._fully_connect(out_channels, self.num_color_channels)
+
+            all_weights.extend(fc_weights)
+            all_biases.extend(fc_biases)
+
+            (t_out, t_out_weights, t_out_biases) = self._fully_connect(fc_channels, 1, name_prefix='fc_output', out_size=1)
+            all_weights.extend(t_out_weights)
+            all_biases.extend(t_out_biases)
+
+            return (t_out, all_weights, all_biases)
+
+        with tf.name_scope('discriminator'):
+            with tf.name_scope('real'):
+                input = tf.placeholder(tf.float32, shape=self.shape, name='input')
+                (real, real_weights, real_biases) = discriminate(input)
+                self._tf.d_real_output = real
+                self._tf.d_real_weights = real_weights
+                self._tf.d_real_biases = real_biases
+            
+            with tf.name_scope('fake'):
+                input = self._tf.g_output
+                (fake, fake_weights, fake_biases) = discriminate(input)
+                self._tf.d_fake_output = fake
+                self._tf.d_fake_weights = fake_weights
+                self._tf.d_fake_biases = fake_biases
+            
 
     def _phase_3_global_loss(self):
         pass
