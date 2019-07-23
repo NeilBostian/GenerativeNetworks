@@ -1,6 +1,7 @@
 import os
+import numpy as np
 import tensorflow as tf
-from utils import obj
+import utils
 
 class GanModel():
     def __init__(self, x_dim, y_dim, learn_rate = 1e-3):
@@ -13,7 +14,7 @@ class GanModel():
         self.learn_rate = learn_rate
         self.shape = [x_dim, y_dim, self.num_color_channels]
 
-        self._tf = obj()
+        self._tf = utils.obj()
 
         self._phase_1_create_generator_activations()
         self._phase_2_create_discriminator_activations()
@@ -184,6 +185,7 @@ class GanModel():
             with tf.name_scope('merge_fc'):
                 self._tf.g_output = tf.reshape(tf.stack(fc_channels), self.shape)
 
+            self._tf.g_input = input
             self._tf.g_weights = all_weights
             self._tf.g_biases = all_biases
 
@@ -235,6 +237,7 @@ class GanModel():
             all_weights.extend(t_out_weights)
             all_biases.extend(t_out_biases)
 
+            self._tf.d_input = real_input
             self._tf.d_real_output = t_out_real[0]
             self._tf.d_fake_output = t_out_fake[0]
             self._tf.d_weights = all_weights
@@ -250,18 +253,38 @@ class GanModel():
             
             with tf.name_scope('generator'):
                 g_theta = self._tf.g_weights + self._tf.g_biases
-                g_loss = tf.reduce_sum(d_real) + tf.reduce_sum(d_fake) + self._log(cross_loss)
-                g_solver = tf.train.AdamOptimizer(learning_rate=self.learn_rate).minimize(g_loss, var_list=g_theta)
+                self._tf.g_loss = tf.reduce_sum(d_real * 0.01) + tf.reduce_sum(d_fake * 0.01) + self._log(cross_loss)
+                self._tf.g_solver = tf.train.AdamOptimizer(learning_rate=self.learn_rate).minimize(self._tf.g_loss, var_list=g_theta)
 
             with tf.name_scope('discriminator'):
                 d_theta = self._tf.d_weights + self._tf.d_biases
-                d_loss = tf.reduce_sum(d_real) + tf.reduce_sum(d_fake) + self._log(cross_loss)
-                d_solver = tf.train.AdamOptimizer(learning_rate=self.learn_rate).minimize(d_loss, var_list=d_theta)
+                self._tf.d_loss = tf.reduce_sum(d_real * 0.01) + tf.reduce_sum(d_fake * 0.01) + self._log(cross_loss)
+                self._tf.d_solver = tf.train.AdamOptimizer(learning_rate=self.learn_rate).minimize(self._tf.d_loss, var_list=d_theta)
 
 if __name__ == '__main__':
+    def sample_z(m, n, p):
+        return np.random.uniform(-1., 1., size=[m, n, p])
+
     for f in os.listdir('bin/tb'):
         os.remove('bin/tb/' + f)
 
-    g = GanModel(178, 218)
+    g = GanModel(218, 178)
     tf.summary.FileWriter('bin/tb', g.sess.graph)
+
     imgs_dir = '.celeb_data'
+
+    sess = g.sess
+    it = 1
+    for img in utils.get_img_feed(utils.listdir_absolute(imgs_dir)):
+        a, _, b, _ = sess.run([
+            g._tf.g_loss,
+            g._tf.g_solver,
+            g._tf.d_loss,
+            g._tf.d_solver
+        ], feed_dict={
+            g._tf.g_input: sample_z(218, 178, 3),
+            g._tf.d_input: img,
+        })
+
+        print(f'it={str(it).zfill(3)}: g_loss={a}, d_loss={b}')
+        it += 1
