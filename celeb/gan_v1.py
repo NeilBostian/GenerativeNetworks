@@ -88,7 +88,10 @@ class GanModel():
                 with tf.name_scope('fc_' + str(i)):
                     stack = tf.stack(inputs)
                     mean = tf.reduce_mean(stack, 0)
-                    outputs.append(mean)
+                    (t_out, wts, bs) = self._weight(mean)
+                    outputs.append(t_out)
+                    weights.extend(wts)
+                    biases.extend(bs)
 
             return (outputs, weights, biases)
 
