@@ -55,54 +55,43 @@ class GanModel():
             w2 = tf.Variable(self._xavier_init([activation_size, out_size]), name='weight')
             b2 = tf.Variable(tf.zeros(shape=[out_size]), name='bias')
 
-            apply_w1b1 = tf.squeeze(tf.matmul(tf.expand_dims(t_in, 0), w1)) + b1
+            apply_w1b1 = tf.squeeze(tf.matmul(tf.expand_dims(t_in, 0), w1), 0) + b1
             apply_activation = activation(apply_w1b1)
-            apply_w2b2 = tf.squeeze(tf.matmul(tf.expand_dims(apply_activation, 0), w2)) + b2
+            apply_w2b2 = tf.squeeze(tf.matmul(tf.expand_dims(apply_activation, 0), w2), 0) + b2
             return (apply_w2b2, [w1, w2], [b1, b2])
 
+    def _fully_connect(self, inputs, num_outputs):
+        """
+        Fully connects all input channels using matrix dot product
+        `inputs` must have length >= 2
+        `num_outputs` must be >= 1
+
+        Returns: (outputs, weights, biases)
+        """
+        outputs = list()
+        weights = list()
+        biases = list()
+
+        for i in range(num_outputs):
+            with tf.name_scope('fc_' + str(i)):
+                stack = tf.stack(inputs)
+                mean = tf.reduce_mean(stack, 0)
+                (t_out, wts, bs) = self._weight(mean)
+                outputs.append(t_out)
+                weights.extend(wts)
+                biases.extend(bs)
+
+        return (outputs, weights, biases)
+
     def _phase_1_create_generator_activations(self):
-        def process_channel(in_channel, scope_name):
-            """
-            Processes an image channel (color channel or greyscale) with shape `[self.flat_dim]` Rank/dimension of 1.
-            Returns: (out_channel, weights, biases)
-                out_channel: Tensor of shape `in_channel.shape`
-                weights: list of weights applied during processing
-                biases: list of biases applied during processing
-            """
-            with tf.name_scope(scope_name):
-                return self._weight(in_channel)
-
-        def fully_connect(inputs, num_outputs):
-            """
-            Fully connects all input channels using matrix dot product
-            `inputs` must have length >= 2
-            `num_outputs` must be >= 1
-
-            Returns: (outputs, weights, biases)
-            """
-            outputs = list()
-            weights = list()
-            biases = list()
-
-            for i in range(num_outputs):
-                with tf.name_scope('fc_' + str(i)):
-                    stack = tf.stack(inputs)
-                    mean = tf.reduce_mean(stack, 0)
-                    (t_out, wts, bs) = self._weight(mean)
-                    outputs.append(t_out)
-                    weights.extend(wts)
-                    biases.extend(bs)
-
-            return (outputs, weights, biases)
-
-        with tf.name_scope('generator_activation'):
+        with tf.name_scope('generator'):
             input = tf.placeholder(tf.float32, shape=self.shape, name='input')
 
             with tf.name_scope('split_channels'):
                 flat_input = tf.reshape(input, [self.flat_dim, self.num_color_channels])
                 split_channels = [tf.reshape(x, [self.flat_dim]) for x in tf.split(flat_input, self.num_color_channels, axis=1)]
             
-                channels = [tf.reduce_mean(flat_input, 1)] # greyscale channel 0
+                channels = [tf.reduce_mean(flat_input, 1)] # greyscale as the mean of all 3 color channels
                 channels.extend(split_channels)
             
             out_channels = list()
@@ -117,18 +106,25 @@ class GanModel():
                 elif it == 2: cname = 'green'
                 elif it == 3: cname = 'blue'
 
-                (out_channel, weights, biases) = process_channel(in_channel, cname)
+                with tf.name_scope(cname):
+                    (out_channel, weights, biases) = self._weight(in_channel)
 
-                out_channels.append(out_channel)
-                all_weights.extend(weights)
-                all_biases.extend(biases)
+                    out_channels.append(out_channel)
+                    all_weights.extend(weights)
+                    all_biases.extend(biases)
 
-            (fc_channels, fc_weights, fc_biases) = fully_connect(out_channels, self.num_color_channels)
+            (fc_channels, fc_weights, fc_biases) = self._fully_connect(out_channels, self.num_color_channels)
+
+            all_weights.extend(fc_weights)
+            all_biases.extend(fc_biases)
 
             with tf.name_scope('merge_fc'):
                 transpose = [tf.squeeze(x) for x in fc_channels]
                 stacked_output = tf.stack(transpose)
-                self._tf.discriminator_output = tf.reshape(stacked_output, self.shape)
+                self._tf.generator_output = tf.reshape(stacked_output, self.shape)
+
+            self._tf.generator_weights = all_weights
+            self._tf.generator_biases = all_biases
 
     def _phase_2_create_discriminator_activations(self):
         pass
