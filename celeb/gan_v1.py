@@ -7,6 +7,8 @@ img_shape = [178, 218, 3]
 
 class GanModel():
     def __init__(self, x_dim, y_dim, learn_rate = 1e-3):
+        self.sess = tf.Session()
+
         self.x_dim = x_dim
         self.y_dim = y_dim
         self.flat_dim = x_dim * y_dim
@@ -22,10 +24,7 @@ class GanModel():
         self._phase_4_generator_loss()
         self._phase_5_discriminator_loss()
 
-        sess = tf.Session()
-        sess.run(tf.global_variables_initializer())
-        
-        self.sess = sess
+        self.sess.run(tf.global_variables_initializer())
 
 
     def _log(self, x):
@@ -37,9 +36,29 @@ class GanModel():
         you can read more here: https://prateekvjoshi.com/2016/03/29/understanding-xavier-initialization-in-deep-neural-networks/
         """
         with tf.name_scope('xavier_init'):
-            in_dim = size[0]
+            in_dim = tf.cast(size[0], tf.float32)
             xavier_stddev = 1. / tf.sqrt(in_dim / 2.)
             return tf.random_normal(shape=size, stddev=xavier_stddev)
+
+    def _weight(self, t_in, activation_size = 128, out_size=-1, activation=tf.nn.relu):
+        r = self.sess.run(tf.rank(t_in))
+        if r != 1:
+            raise os.error(f'input tensor must have rank 1, received rank {r}')
+
+        with tf.name_scope('weight'):
+            in_size = self.sess.run(tf.size(t_in))
+            if out_size == -1: out_size = in_size
+
+            w1 = tf.Variable(self._xavier_init([in_size, activation_size]), name='weight')
+            b1 = tf.Variable(tf.zeros(shape=[activation_size]), name='bias')
+            
+            w2 = tf.Variable(self._xavier_init([activation_size, out_size]), name='weight')
+            b2 = tf.Variable(tf.zeros(shape=[out_size]), name='bias')
+
+            apply_w1b1 = tf.squeeze(tf.matmul(tf.expand_dims(t_in, 0), w1)) + b1
+            apply_activation = activation(apply_w1b1)
+            apply_w2b2 = tf.squeeze(tf.matmul(tf.expand_dims(apply_activation, 0), w2)) + b2
+            return (apply_w2b2, [w1, w2], [b1, b2])
 
     def _phase_1_create_generator_activations(self):
         def process_channel(in_channel, scope_name):
@@ -51,9 +70,7 @@ class GanModel():
                 biases: list of biases applied during processing
             """
             with tf.name_scope(scope_name):
-                weights = list()
-                biases = list()
-                return (in_channel * 1, weights, biases)
+                return self._weight(in_channel)
 
         def fully_connect(inputs, num_outputs):
             """
