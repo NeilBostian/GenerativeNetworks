@@ -91,7 +91,7 @@ class GanModel():
 
             return (t_out1, t_out2, [w1, w2], [b1, b2])
 
-    def _fully_connect(self, inputs, num_outputs, name_prefix=None, out_size=-1):
+    def _fully_connect(self, inputs, num_outputs, name_prefix=None, activation_size=128, activation=tf.nn.relu):
         """
         Fully connects all input channels using matrix dot product
         `inputs` must have length >= 2
@@ -106,21 +106,34 @@ class GanModel():
 
         name_prefix = name_prefix or 'fc'
 
+        num_inputs = len(inputs)
+
+        input_size = self.sess.run(tf.size(inputs[0]))
+
         for i in range(num_outputs):
             with tf.name_scope(f'{name_prefix}_{i}'):
-                stack = tf.stack(inputs)
-                mean = tf.reduce_mean(stack, 0)
-                (t_out, wts, bs) = self._weight(mean, out_size=out_size)
+                stack = tf.reshape(tf.stack(inputs), [input_size, num_inputs])
+
+                w1 = tf.Variable(self._xavier_init([num_inputs, activation_size]), name='weight')
+                b1 = tf.Variable(tf.zeros(shape=[activation_size]), name='bias')
+
+                act = activation(tf.matmul(stack, w1) + b1)
+
+                w2 = tf.Variable(self._xavier_init([activation_size, 1]), name='weight')
+                b2 = tf.Variable(tf.zeros(shape=[1]), name='bias')
+
+                t_out = tf.squeeze(tf.matmul(act, w2) + b2)
+
                 outputs.append(t_out)
-                weights.extend(wts)
-                biases.extend(bs)
+                weights.extend([w1, w2])
+                biases.extend([b1, b2])
 
         return (outputs, weights, biases)
 
-    def _dual_fully_connect(self, inputs1, inputs2, num_outputs, name_prefix=None, out_size=-1):
+    def _dual_fully_connect(self, inputs1, inputs2, num_outputs, name_prefix=None, activation_size=128, activation=tf.nn.relu):
         if len(inputs1) != len(inputs2):
             raise os.error(f'inputs1 and inputs2 must be the same length. received len(inputs1)={len(inputs1)} len(inputs2)={len(inputs2)}')
-
+        
         outputs1 = list()
         outputs2 = list()
         weights = list()
@@ -128,21 +141,29 @@ class GanModel():
 
         name_prefix = name_prefix or 'fc'
 
-        with tf.name_scope('stack_mean1'):
-            stack1 = tf.stack(inputs1)
-            mean1 = tf.reduce_mean(stack1, 0)
+        num_inputs = len(inputs1)
 
-        with tf.name_scope('stack_mean2'):
-            stack2 = tf.stack(inputs2)
-            mean2 = tf.reduce_mean(stack2, 0)
+        input_size = self.sess.run(tf.size(inputs1[0]))
 
         for i in range(num_outputs):
             with tf.name_scope(f'{name_prefix}_{i}'):
-                (t_out1, t_out2, w, b) = self._dual_weight(mean1, mean2, out_size=out_size)
-                outputs1.append(t_out1)
-                outputs2.append(t_out2)
-                weights.extend(w)
-                biases.extend(b)
+                stack1 = tf.reshape(tf.stack(inputs1), [input_size, num_inputs])
+                stack2 = tf.reshape(tf.stack(inputs2), [input_size, num_inputs])
+
+                w1 = tf.Variable(self._xavier_init([num_inputs, activation_size]), name='weight')
+                b1 = tf.Variable(tf.zeros(shape=[activation_size]), name='bias')
+
+                w2 = tf.Variable(self._xavier_init([activation_size, 1]), name='weight')
+                b2 = tf.Variable(tf.zeros(shape=[1]), name='bias')
+
+                def proc(t_in):
+                    act = activation(tf.matmul(t_in, w1) + b1)
+                    return tf.squeeze(tf.matmul(act, w2) + b2)
+
+                outputs1.append(proc(stack1))
+                outputs2.append(proc(stack2))
+                weights.extend([w1, w2])
+                biases.extend([b1, b2])
 
         return (outputs1, outputs2, weights, biases)
 
@@ -233,9 +254,19 @@ class GanModel():
             all_weights.extend(fc_weights)
             all_biases.extend(fc_biases)
 
-            (t_out_real, t_out_fake, t_out_weights, t_out_biases) = self._dual_fully_connect(fc_channels_real, fc_channels_fake, 1, name_prefix='fc_output', out_size=1)
+            (t_out_real, t_out_fake, t_out_weights, t_out_biases) = self._dual_fully_connect(fc_channels_real, fc_channels_fake, 1, name_prefix='fc_output')
             all_weights.extend(t_out_weights)
             all_biases.extend(t_out_biases)
+
+            with tf.name_scope('prediction'):
+                w1 = tf.Variable(self._xavier_init([self.flat_dim, 1]), name='weight')
+                b1 = tf.Variable(tf.zeros([1]), name='bias')
+
+                def apply_weight(t_in):
+                    return tf.reshape(tf.matmul(t_in, w1) + b1, [1])
+
+                t_out_real = apply_weight(t_out_real)
+                t_out_fake = apply_weight(t_out_fake)
 
             self._tf.d_input = real_input
             self._tf.d_real_output = t_out_real[0]
@@ -271,7 +302,7 @@ if __name__ == '__main__':
     g = GanModel(218, 178)
     tf.summary.FileWriter('bin/tb', g.sess.graph)
 
-    imgs_dir = '.celeb_data'
+    imgs_dir = '.celeb_data/img_align_celeba/img_align_celeba'
 
     sess = g.sess
     it = 1
