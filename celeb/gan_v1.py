@@ -2,9 +2,6 @@ import os
 import tensorflow as tf
 from utils import obj
 
-imgs_dir = '.celeb_data'
-img_shape = [178, 218, 3]
-
 class GanModel():
     def __init__(self, x_dim, y_dim, learn_rate = 1e-3):
         self.sess = tf.Session()
@@ -20,12 +17,9 @@ class GanModel():
 
         self._phase_1_create_generator_activations()
         self._phase_2_create_discriminator_activations()
-        self._phase_3_global_loss()
-        self._phase_4_generator_loss()
-        self._phase_5_discriminator_loss()
+        self._phase_3_loss()
 
         self.sess.run(tf.global_variables_initializer())
-
 
     def _log(self, x):
         return tf.log(x + 1e-8)
@@ -241,17 +235,28 @@ class GanModel():
             all_weights.extend(t_out_weights)
             all_biases.extend(t_out_biases)
 
-            self._tf.d_real_output = t_out_real
-            self._tf.d_fake_output = t_out_fake            
+            self._tf.d_real_output = t_out_real[0]
+            self._tf.d_fake_output = t_out_fake[0]
+            self._tf.d_weights = all_weights
+            self._tf.d_biases = all_biases
 
-    def _phase_3_global_loss(self):
-        pass
+    def _phase_3_loss(self):
+        d_real = self._tf.d_real_output
+        d_fake = self._tf.d_fake_output
 
-    def _phase_4_generator_loss(self):
-        pass
+        with tf.name_scope('loss'):
+            with tf.name_scope('cross'):
+                cross_loss = tf.reduce_sum(tf.exp(-d_real)) + tf.reduce_sum(tf.exp(-d_fake))
+            
+            with tf.name_scope('generator'):
+                g_theta = self._tf.g_weights + self._tf.g_biases
+                g_loss = tf.reduce_sum(d_real) + tf.reduce_sum(d_fake) + self._log(cross_loss)
+                g_solver = tf.train.AdamOptimizer(learning_rate=self.learn_rate).minimize(g_loss, var_list=g_theta)
 
-    def _phase_5_discriminator_loss(self):
-        pass
+            with tf.name_scope('discriminator'):
+                d_theta = self._tf.d_weights + self._tf.d_biases
+                d_loss = tf.reduce_sum(d_real) + tf.reduce_sum(d_fake) + self._log(cross_loss)
+                d_solver = tf.train.AdamOptimizer(learning_rate=self.learn_rate).minimize(d_loss, var_list=d_theta)
 
 if __name__ == '__main__':
     for f in os.listdir('bin/tb'):
@@ -259,3 +264,4 @@ if __name__ == '__main__':
 
     g = GanModel(178, 218)
     tf.summary.FileWriter('bin/tb', g.sess.graph)
+    imgs_dir = '.celeb_data'
