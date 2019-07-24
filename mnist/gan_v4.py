@@ -9,25 +9,26 @@ from utils import obj
 
 class GanModel():
 
-    def __init__(self):
-        self._c_ = obj(
-            mb_size = 32,
-            x_dim = 784,
-            z_dim = 64,
-            h_dim = 128,
-            learn_rate = 1e-3
-        )
+    def __init__(self, train_batch_size=32, x_dim=28, y_dim=28, channels=1, noise_dim=64, learn_rate=1e-3):
+        self._c = obj()
+        self._c.train_batch_size = train_batch_size
+        self._c.x_dim = x_dim
+        self._c.y_dim = y_dim
+        self._c.channels = channels
+        self._c.noise_dim = noise_dim
+        self._c.learn_rate = learn_rate
+        self._c.flat_dim = x_dim * y_dim
 
-        sess = tf.Session()
-        self.sess = sess
+        self.sess = tf.Session()
 
+        # This object holds tensor/op references that are shared between portions of the network
         self._tf = obj()
 
         self._generator()
         self._discriminator()
         self._loss()
 
-        sess.run(tf.global_variables_initializer())
+        self.sess.run(tf.global_variables_initializer())
         
 
     def _xavier_init_(self, size):
@@ -85,9 +86,9 @@ class GanModel():
 
     def _generator(self):
         with tf.name_scope('generator_activation'):
-            input = tf.placeholder(tf.float32, shape=[None, self._c_.z_dim], name='input')
+            input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
 
-            (outputs, w1, b1, w2, b2) = self._weight([input], out_size=self._c_.x_dim)
+            (outputs, w1, b1, w2, b2) = self._weight([input], out_size=self._c.flat_dim)
 
             self._tf.g_input = input
             self._tf.g_train_vars = [w1, w2, b1, b2]
@@ -98,7 +99,7 @@ class GanModel():
             Creates our discriminator model
         """
         with tf.name_scope('discriminator_activation'):
-            real_input = tf.placeholder(tf.float32, shape=[None, self._c_.x_dim], name='input')
+            real_input = tf.placeholder(tf.float32, shape=[None, self._c.flat_dim], name='input')
             fake_input = self._tf.g_output            
 
             (outputs, w1, b1, w2, b2) = self._weight([real_input, fake_input], out_size=1)
@@ -120,16 +121,16 @@ class GanModel():
                 cross = tf.reduce_sum(tf.exp(-d_real)) + tf.reduce_sum(tf.exp(-d_fake))
             
             with tf.name_scope('generator'):
-                g_target = 1./(self._c_.mb_size*2)
+                g_target = 1./(self._c.train_batch_size*2)
                 self._tf.g_loss = tf.reduce_sum(g_target * d_real) + tf.reduce_sum(g_target * d_fake) + log(cross)
-                self._tf.g_solver = tf.train.AdamOptimizer(learning_rate=self._c_.learn_rate).minimize(self._tf.g_loss, var_list=self._tf.g_train_vars)
+                self._tf.g_solver = tf.train.AdamOptimizer(learning_rate=self._c.learn_rate).minimize(self._tf.g_loss, var_list=self._tf.g_train_vars)
                 
                 tf.summary.scalar('loss', self._tf.g_loss)
 
             with tf.name_scope('discriminator'):
-                d_target = 1./self._c_.mb_size
+                d_target = 1./self._c.train_batch_size
                 self._tf.d_loss = tf.reduce_sum(d_target * d_real) + log(cross)
-                self._tf.d_solver = tf.train.AdamOptimizer(learning_rate=self._c_.learn_rate).minimize(self._tf.d_loss, var_list=self._tf.d_train_vars)
+                self._tf.d_solver = tf.train.AdamOptimizer(learning_rate=self._c.learn_rate).minimize(self._tf.d_loss, var_list=self._tf.d_train_vars)
 
     def run_training_demo(self):
         def plot(samples):
@@ -163,8 +164,8 @@ class GanModel():
         mnist = input_data.read_data_sets('.MNIST_data', one_hot=True)
 
         for it in range(40000):
-            d_input, _ = mnist.train.next_batch(self._c_.mb_size)
-            g_input = sample_z(self._c_.mb_size, self._c_.z_dim)
+            d_input, _ = mnist.train.next_batch(self._c.train_batch_size)
+            g_input = sample_z(self._c.train_batch_size, self._c.noise_dim)
 
             d_solver = self._tf.d_solver
             d_loss = self._tf.d_loss
@@ -186,7 +187,7 @@ class GanModel():
                     .format(it, D_loss_curr, G_loss_curr))
 
                 genSamples = self._tf.g_output
-                samples = sess.run(genSamples, feed_dict={self._tf.g_input: sample_z(16, self._c_.z_dim)})
+                samples = sess.run(genSamples, feed_dict={self._tf.g_input: sample_z(16, self._c.noise_dim)})
 
                 fig = plot(samples)
                 plt.savefig(f'bin/gen/{str(i).zfill(3)}.png', bbox_inches='tight')
