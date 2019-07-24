@@ -98,25 +98,15 @@ class GanModel():
             Creates our discriminator model
         """
         with tf.name_scope('discriminator_activation'):
-            input = tf.placeholder(tf.float32, shape=[None, self._c_.x_dim], name='input')
-            
-            w1 = tf.Variable(self._xavier_init_([self._c_.x_dim, self._c_.h_dim]), name='weight1')
-            w2 = tf.Variable(self._xavier_init_([self._c_.h_dim, 1]), name='weight2')
-            b1 = tf.Variable(tf.zeros(shape=[self._c_.h_dim]), name='bias1')
-            b2 = tf.Variable(tf.zeros(shape=[1]), name='bias2')
-            train_vars = [w1, w2, b1, b2]
-            
-            def apply_activation(in_tensor):
-                activation = tf.nn.relu(tf.matmul(in_tensor, w1) + b1)
-                return tf.matmul(activation, w2) + b2
+            real_input = tf.placeholder(tf.float32, shape=[None, self._c_.x_dim], name='input')
+            fake_input = self._tf.g_output            
 
-            real = apply_activation(input)
-            fake = apply_activation(self._tf.g_output)
+            (outputs, w1, b1, w2, b2) = self._weight([real_input, fake_input], out_size=1)
 
-            self._tf.d_input = input
-            self._tf.d_train_vars = train_vars
-            self._tf.d_output_real = real
-            self._tf.d_output_fake = fake
+            self._tf.d_input = real_input
+            self._tf.d_train_vars = [w1, w2, b1, b2]
+            self._tf.d_output_real = outputs[0]
+            self._tf.d_output_fake = outputs[1]
 
     def _loss(self):
         def log(x):
