@@ -1,35 +1,32 @@
 import tensorflow as tf
-from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
+from PIL import Image
 import os
 
-from utils import obj
+import utils
 
 class GanModel():
 
     def __init__(self, train_batch_size=32, x_dim=28, y_dim=28, channels=1, noise_dim=64, learn_rate=1e-3):
-        self._c = obj()
+        self._c = utils.obj()
         self._c.train_batch_size = train_batch_size
         self._c.x_dim = x_dim
         self._c.y_dim = y_dim
         self._c.channels = channels
         self._c.noise_dim = noise_dim
         self._c.learn_rate = learn_rate
-        self._c.flat_dim = x_dim * y_dim
+        self._c.flat_dim = x_dim * y_dim * channels
 
         self.sess = tf.Session()
 
         # This object holds tensor/op references that are shared between portions of the network
-        self._tf = obj()
+        self._tf = utils.obj()
 
         self._generator()
         self._discriminator()
         self._loss()
 
         self.sess.run(tf.global_variables_initializer())
-        
 
     def _xavier_init_(self, size):
         """
@@ -86,23 +83,34 @@ class GanModel():
 
     def _generator(self):
         with tf.name_scope('generator_activation'):
-            input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
+            g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
 
-            (outputs, w1, b1, w2, b2) = self._weight([input], out_size=self._c.flat_dim)
-
-            self._tf.g_input = input
+            (outputs, w1, b1, w2, b2) = self._weight([g_input], out_size=self._c.flat_dim)
+            
+            self._tf.g_input = g_input
             self._tf.g_train_vars = [w1, w2, b1, b2]
-            self._tf.g_output = tf.nn.sigmoid(outputs[0])
+
+            t_out = outputs[0]
+            batch_size = tf.shape(g_input)[0]
+            out_shape = [batch_size, self._c.x_dim, self._c.y_dim, self._c.channels]
+            self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
 
     def _discriminator(self):
         """
             Creates our discriminator model
         """
         with tf.name_scope('discriminator_activation'):
-            real_input = tf.placeholder(tf.float32, shape=[None, self._c.flat_dim], name='input')
-            fake_input = self._tf.g_output            
+            real_input = tf.placeholder(tf.float32, shape=[None, self._c.x_dim, self._c.y_dim, self._c.channels], name='input')
+            
+            batch_size = tf.shape(real_input)[0]
 
-            (outputs, w1, b1, w2, b2) = self._weight([real_input, fake_input], out_size=1)
+            real_flat = tf.reshape(real_input, [batch_size, self._c.flat_dim])
+
+            fake_input = self._tf.g_output
+
+            fake_flat = tf.reshape(fake_input, [batch_size, self._c.flat_dim])
+
+            (outputs, w1, b1, w2, b2) = self._weight([real_flat, fake_flat], out_size=1)
 
             self._tf.d_input = real_input
             self._tf.d_train_vars = [w1, w2, b1, b2]
@@ -132,69 +140,58 @@ class GanModel():
                 self._tf.d_loss = tf.reduce_sum(d_target * d_real) + log(cross)
                 self._tf.d_solver = tf.train.AdamOptimizer(learning_rate=self._c.learn_rate).minimize(self._tf.d_loss, var_list=self._tf.d_train_vars)
 
-    def run_training_demo(self):
-        def plot(samples):
-            fig = plt.figure(figsize=(4, 4))
-            gs = gridspec.GridSpec(4, 4)
-            gs.update(wspace=0.05, hspace=0.05)
-
-            for i, sample in enumerate(samples):
-                ax = plt.subplot(gs[i])
-                plt.axis('off')
-                ax.set_xticklabels([])
-                ax.set_yticklabels([])
-                ax.set_aspect('equal')
-                plt.imshow(sample.reshape(28, 28), cmap='Greys_r')
-
-            return fig
-
-        def sample_z(m, n):
-            return np.random.uniform(-1., 1., size=[m, n])
-
-        sess = self.sess
-
-        summaries = tf.summary.merge_all()
-        writer = tf.summary.FileWriter('bin/tb', sess.graph)
-        
-        if not os.path.exists('bin/gen'):
-            os.makedirs('bin/gen')
-
-        i = 0
-
-        mnist = input_data.read_data_sets('.MNIST_data', one_hot=True)
-
-        for it in range(40000):
-            d_input, _ = mnist.train.next_batch(self._c.train_batch_size)
-            g_input = sample_z(self._c.train_batch_size, self._c.noise_dim)
-
-            d_solver = self._tf.d_solver
-            d_loss = self._tf.d_loss
-
-            g_solver = self._tf.g_solver
-            g_loss = self._tf.g_loss
-
-            _, D_loss_curr, _, G_loss_curr, summary = sess.run(
-                [d_solver, d_loss, g_solver, g_loss, summaries], feed_dict={
-                    self._tf.d_input: d_input,
-                    self._tf.g_input: g_input
-                }
-            )
-
-            writer.add_summary(summary, global_step=it)
-
-            if it % 1000 == 0:
-                print('Iter: {}; D_loss: {:.4}; G_loss: {:.4}'
-                    .format(it, D_loss_curr, G_loss_curr))
-
-                genSamples = self._tf.g_output
-                samples = sess.run(genSamples, feed_dict={self._tf.g_input: sample_z(16, self._c.noise_dim)})
-
-                fig = plot(samples)
-                plt.savefig(f'bin/gen/{str(i).zfill(3)}.png', bbox_inches='tight')
-                i += 1
-        plt.close(fig)
-
+    def generate_noise(self):
+        return np.random.uniform(-1., 1., size=[self._c.train_batch_size, self._c.noise_dim])
 
 if __name__ == '__main__':
     g = GanModel()
-    g.run_training_demo()
+    
+    if not os.path.exists('bin/gen'):
+        os.makedirs('bin/gen')
+
+
+    if os.path.exists('bin/tb'):
+        for f in os.listdir('bin/tb'):
+            os.remove('bin/tb/' + f)
+
+    sess = g.sess
+    summaries = tf.summary.merge_all()
+    writer = tf.summary.FileWriter('bin/tb', sess.graph)
+
+    it = 0
+    for batch in utils.batch_img_feed('.MNIST_data/raw', g._c.train_batch_size):
+        gen, g_loss, d_loss, _, _, summary = sess.run([
+            g._tf.g_output,
+            g._tf.g_loss,
+            g._tf.d_loss,
+            g._tf.g_solver,
+            g._tf.d_solver,
+            summaries
+        ], feed_dict={
+            g._tf.d_input: batch,
+            g._tf.g_input: g.generate_noise()
+        })
+
+        writer.add_summary(summary, global_step=it)
+
+        if it % 10 == 0:
+            print(f'it={it}, g_loss={g_loss:.4}, d_loss={d_loss:.4}')
+
+        if it % 100 == 0:
+            for img_arr, it2 in zip(gen, range(0, len(gen))):
+                if it2 > 5:
+                    break
+
+                if g._c.channels == 1:
+                    # in a 1-channel image, we need to drop the last dimension so it's formatted properly for PIL.Image.fromarray
+                    # https://stackoverflow.com/questions/37152031/numpy-remove-a-dimension-from-np-array
+                    img_arr = img_arr[:,:,0] 
+
+                    fmt = 'L'
+                elif g._c.channels == 3:
+                    fmt = 'RGB'
+
+                img = Image.fromarray(img_arr, fmt)
+                img.save(f'bin/gen/{it}-{it2}.png')
+
+        it += 1
