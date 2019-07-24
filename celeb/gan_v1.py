@@ -2,9 +2,10 @@ import os
 import numpy as np
 import tensorflow as tf
 import utils
+from PIL import Image
 
 class GanModel():
-    def __init__(self, x_dim, y_dim, learn_rate = 1e-3):
+    def __init__(self, x_dim, y_dim, learn_rate = 1e-5):
         self.sess = tf.Session()
 
         self.x_dim = x_dim
@@ -12,7 +13,7 @@ class GanModel():
         self.flat_dim = x_dim * y_dim
         self.num_color_channels = 3
         self.learn_rate = learn_rate
-        self.shape = [x_dim, y_dim, self.num_color_channels]
+        self.shape = [y_dim, x_dim, self.num_color_channels]
 
         self._tf = utils.obj()
 
@@ -204,7 +205,7 @@ class GanModel():
             all_biases.extend(fc_biases)
 
             with tf.name_scope('merge_fc'):
-                self._tf.g_output = tf.reshape(tf.stack(fc_channels), self.shape)
+                self._tf.g_output = tf.cast(255 * tf.reshape(tf.stack(fc_channels), self.shape), tf.uint8)
 
             self._tf.g_input = input
             self._tf.g_weights = all_weights
@@ -227,7 +228,7 @@ class GanModel():
             real_input = tf.placeholder(tf.float32, shape=self.shape, name='input')
             real_channels = split(real_input)
             
-            fake_input = self._tf.g_output
+            fake_input = tf.cast(self._tf.g_output, tf.float32)
             fake_channels = split(fake_input)
 
             real_out_channels = list()
@@ -263,7 +264,7 @@ class GanModel():
                 b1 = tf.Variable(tf.zeros([1]), name='bias')
 
                 def apply_weight(t_in):
-                    return tf.reshape(tf.matmul(t_in, w1) + b1, [1])
+                    return tf.nn.sigmoid(tf.reshape(tf.matmul(t_in, w1) + b1, [1]))
 
                 t_out_real = apply_weight(t_out_real)
                 t_out_fake = apply_weight(t_out_fake)
@@ -275,47 +276,43 @@ class GanModel():
             self._tf.d_biases = all_biases
 
     def _phase_3_loss(self):
-        d_real = self._tf.d_real_output
-        d_fake = self._tf.d_fake_output
-
         with tf.name_scope('loss'):
-            with tf.name_scope('cross'):
-                cross_loss = tf.reduce_sum(tf.exp(-d_real)) + tf.reduce_sum(tf.exp(-d_fake))
-            
-            with tf.name_scope('generator'):
-                g_theta = self._tf.g_weights + self._tf.g_biases
-                self._tf.g_loss = tf.reduce_sum(d_real * 0.01) + tf.reduce_sum(d_fake * 0.01) + self._log(cross_loss)
-                self._tf.g_solver = tf.train.AdamOptimizer(learning_rate=self.learn_rate).minimize(self._tf.g_loss, var_list=g_theta)
-
-            with tf.name_scope('discriminator'):
-                d_theta = self._tf.d_weights + self._tf.d_biases
-                self._tf.d_loss = tf.reduce_sum(d_real * 0.01) + tf.reduce_sum(d_fake * 0.01) + self._log(cross_loss)
-                self._tf.d_solver = tf.train.AdamOptimizer(learning_rate=self.learn_rate).minimize(self._tf.d_loss, var_list=d_theta)
+            var_list = self._tf.g_weights + self._tf.g_biases + self._tf.d_weights + self._tf.d_biases
+            self._tf.loss = self._tf.d_fake_output
+            self._tf.solver = tf.train.AdamOptimizer(learning_rate=self.learn_rate).minimize(self._tf.loss, var_list=var_list)
 
 if __name__ == '__main__':
     def sample_z(m, n, p):
         return np.random.uniform(-1., 1., size=[m, n, p])
 
-    for f in os.listdir('bin/tb'):
-        os.remove('bin/tb/' + f)
+    if os.path.exists('bin/tb'):
+        for f in os.listdir('bin/tb'):
+            os.remove('bin/tb/' + f)
 
-    g = GanModel(218, 178)
+    g = GanModel(178, 218)
     tf.summary.FileWriter('bin/tb', g.sess.graph)
 
-    imgs_dir = '.celeb_data/img_align_celeba/img_align_celeba'
+    imgs_dir = 'C:\\repos\\_data\\celeb\\imgs'
 
+    if not os.path.exists('bin/gen'):
+        os.makedirs('bin/gen')
+        
     sess = g.sess
-    it = 1
+    it = 0
     for img in utils.get_img_feed(utils.listdir_absolute(imgs_dir)):
-        a, _, b, _ = sess.run([
-            g._tf.g_loss,
-            g._tf.g_solver,
-            g._tf.d_loss,
-            g._tf.d_solver
+        gen, a, _ = sess.run([
+            g._tf.g_output,
+            g._tf.loss,
+            g._tf.solver
         ], feed_dict={
             g._tf.g_input: sample_z(218, 178, 3),
             g._tf.d_input: img,
         })
 
-        print(f'it={str(it).zfill(3)}: g_loss={a}, d_loss={b}')
+        if it % 25 == 0:
+            print(f'it={str(it).zfill(3)}: loss={a}')
+            gen = np.ascontiguousarray(gen)
+            img = Image.fromarray(gen, 'RGB')
+            img.save(f'bin/gen/{str(it).zfill(3)}.png')
+
         it += 1
