@@ -91,8 +91,7 @@ class GanModel():
             self._tf.g_train_vars = [w1, w2, b1, b2]
 
             t_out = outputs[0]
-            batch_size = tf.shape(g_input)[0]
-            out_shape = [batch_size, self._c.x_dim, self._c.y_dim, self._c.channels]
+            out_shape = [-1, self._c.x_dim, self._c.y_dim, self._c.channels]
             self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
 
     def _discriminator(self):
@@ -102,13 +101,11 @@ class GanModel():
         with tf.name_scope('discriminator_activation'):
             real_input = tf.placeholder(tf.float32, shape=[None, self._c.x_dim, self._c.y_dim, self._c.channels], name='input')
             
-            batch_size = tf.shape(real_input)[0]
-
-            real_flat = tf.reshape(real_input, [batch_size, self._c.flat_dim])
+            real_flat = tf.reshape(real_input, [-1, self._c.flat_dim])
 
             fake_input = self._tf.g_output
 
-            fake_flat = tf.reshape(fake_input, [batch_size, self._c.flat_dim])
+            fake_flat = tf.reshape(fake_input, [-1, self._c.flat_dim])
 
             (outputs, w1, b1, w2, b2) = self._weight([real_flat, fake_flat], out_size=1)
 
@@ -140,8 +137,11 @@ class GanModel():
                 self._tf.d_loss = tf.reduce_sum(d_target * d_real) + log(cross)
                 self._tf.d_solver = tf.train.AdamOptimizer(learning_rate=self._c.learn_rate).minimize(self._tf.d_loss, var_list=self._tf.d_train_vars)
 
-    def generate_noise(self):
-        return np.random.uniform(-1., 1., size=[self._c.train_batch_size, self._c.noise_dim])
+    def generate_noise(self, batch_size=-1):
+        if batch_size == -1:
+            batch_size = self._c.train_batch_size
+
+        return np.random.uniform(-1., 1., size=[batch_size, self._c.noise_dim])
 
 if __name__ == '__main__':
     g = GanModel()
@@ -158,40 +158,48 @@ if __name__ == '__main__':
     summaries = tf.summary.merge_all()
     writer = tf.summary.FileWriter('bin/tb', sess.graph)
 
+    image_repo = utils.ImageRepository.create_or_open('.MNIST_Data/cache.tfrecords', '.MNIST_data/raw')
+    dataset = image_repo.get_dataset().repeat(5).batch(g._c.train_batch_size)
+
+    ds_iterator = tf.data.make_one_shot_iterator(dataset)
+
     it = 0
-    for batch in utils.batch_img_feed('.MNIST_data/raw', g._c.train_batch_size):
-        gen, g_loss, d_loss, _, _, summary = sess.run([
-            g._tf.g_output,
-            g._tf.g_loss,
-            g._tf.d_loss,
-            g._tf.g_solver,
-            g._tf.d_solver,
-            summaries
-        ], feed_dict={
-            g._tf.d_input: batch,
-            g._tf.g_input: g.generate_noise()
-        })
+    try:
+        while True:
+            image_batch = sess.run(ds_iterator.get_next())
 
-        writer.add_summary(summary, global_step=it)
+            gen, g_loss, d_loss, _, _, summary = sess.run([
+                g._tf.g_output,
+                g._tf.g_loss,
+                g._tf.d_loss,
+                g._tf.g_solver,
+                g._tf.d_solver,
+                summaries
+            ], feed_dict={
+                g._tf.d_input: image_batch,
+                g._tf.g_input: g.generate_noise(len(image_batch))
+            })
 
-        if it % 10 == 0:
-            print(f'it={it}, g_loss={g_loss:.4}, d_loss={d_loss:.4}')
+            writer.add_summary(summary, global_step=it)
 
-        if it % 100 == 0:
-            for img_arr, it2 in zip(gen, range(0, len(gen))):
-                if it2 > 5:
-                    break
+            if it % 50 == 0:
+                print(f'it={it}, g_loss={g_loss:.4}, d_loss={d_loss:.4}, gen.shape={gen.shape}')
+                
+                for img_arr, it2 in zip(gen, range(0, len(gen))):
+                    if it2 > 5:
+                        break
 
-                if g._c.channels == 1:
-                    # in a 1-channel image, we need to drop the last dimension so it's formatted properly for PIL.Image.fromarray
-                    # https://stackoverflow.com/questions/37152031/numpy-remove-a-dimension-from-np-array
-                    img_arr = img_arr[:,:,0] 
+                    if g._c.channels == 1:
+                        # in a 1-channel image, we need to drop the last dimension so it's formatted properly for PIL.Image.fromarray
+                        img_arr = img_arr.reshape((img_arr.shape[0], img_arr.shape[1]))
 
-                    fmt = 'L'
-                elif g._c.channels == 3:
-                    fmt = 'RGB'
+                        fmt = 'L'
+                    elif g._c.channels == 3:
+                        fmt = 'RGB'
 
-                img = Image.fromarray(img_arr, fmt)
-                img.save(f'bin/gen/{it}-{it2}.png')
+                    img = Image.fromarray(img_arr, fmt)
+                    img.save(f'bin/gen/{it}-{it2}.png')
 
-        it += 1
+            it += 1
+    except tf.errors.OutOfRangeError:
+        pass
