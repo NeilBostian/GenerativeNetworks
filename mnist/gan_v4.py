@@ -182,23 +182,21 @@ if __name__ == '__main__':
 
             writer.add_summary(summary, global_step=it)
 
-            if it % 50 == 0:
+            if it % 100 == 0:
+                img_arr = np.array(gen[0] * 255, dtype=np.uint8)
+
                 print(f'it={it}, g_loss={g_loss:.4}, d_loss={d_loss:.4}, gen.shape={gen.shape}')
-                
-                for img_arr, it2 in zip(gen, range(0, len(gen))):
-                    if it2 > 5:
-                        break
 
-                    if g._c.channels == 1:
-                        # in a 1-channel image, we need to drop the last dimension so it's formatted properly for PIL.Image.fromarray
-                        img_arr = img_arr.reshape((img_arr.shape[0], img_arr.shape[1]))
+                if g._c.channels == 1:
+                    # in a 1-channel image, we need to drop the last dimension so it's formatted properly for PIL.Image.fromarray
+                    img_arr = img_arr.reshape((img_arr.shape[0], img_arr.shape[1]))
 
-                        fmt = 'L'
-                    elif g._c.channels == 3:
-                        fmt = 'RGB'
+                    fmt = 'L'
+                elif g._c.channels == 3:
+                    fmt = 'RGB'
 
-                    img = Image.fromarray(img_arr, fmt)
-                    img.save(f'bin/gen/{it}-{it2}.png')
+                img = Image.fromarray(img_arr, fmt)
+                img.save(f'bin/gen/{it}.png')
 
             it += 1
     except tf.errors.OutOfRangeError:
