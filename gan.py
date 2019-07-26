@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 from PIL import Image
 import os
-
+import time
 import utils
 
 class GanModel():
@@ -213,9 +213,11 @@ class GanModel():
         ds_iterator = tf.data.make_one_shot_iterator(dataset)
         iter_batch = ds_iterator.get_next()
 
-        global_step = 0
 
         try:
+            global_step = 0
+            start_time = time.time()
+
             while True:
                 image_batch = self.sess.run(iter_batch)
 
@@ -234,7 +236,17 @@ class GanModel():
                 tb_writer.add_summary(summary_result, global_step=global_step)
 
                 if global_step % 50 == 0:
-                    print(f'global_step={global_step}, g_loss={g_loss:.4}, d_loss={d_loss:.4}')
+                    elapsed = time.time() - start_time
+                    steps_per_second = global_step / elapsed
+
+                    if global_step <= 0:
+                        perf_str = ''
+                    elif steps_per_second >= 1.0:
+                        perf_str = f', steps_per_second={steps_per_second:.2}'
+                    else:
+                        perf_str = f', steps_per_minute={steps_per_second*60:.2}'
+
+                    print(f'global_step={global_step}, g_loss={g_loss:.4}, d_loss={d_loss:.4}{perf_str}')
                     
                     out_img_it = 1
                     for gen_img in generated_images:
