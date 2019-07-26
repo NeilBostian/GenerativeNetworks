@@ -74,30 +74,58 @@ class GanModel():
             w2 = tf.Variable(self._xavier_init([activation_size, out_size]), name='weight2')
             b2 = tf.Variable(tf.zeros(shape=[out_size]), name='bias2')
 
-            outs = list()
-
-            for t_in in inputs:
+            def apply_weight(t_in):
                 act = activation(tf.matmul(t_in, w1) + b1)
-                t_out = tf.matmul(act, w2) + b2
-                outs.append(t_out)
+                return tf.matmul(act, w2) + b2
+
+            outs = tf.map_fn(apply_weight, inputs, dtype=tf.float32)
 
             return (outs, w1, b1, w2, b2)
 
+    def _fully_connect(self, inputs, num_outputs, activation_size=128, activation=tf.nn.relu, out_size=-1, tfname_prefix=None):
+        """
+            Takes a 4-D list of inputs and fully connects them to `num_outputs` nodes. Each output
+            node returns the same shape as one of the input nodes.
+        """
+        with tf.name_scope('transpose'):
+            if out_size == -1:
+                out_size = inputs.shape[3].value
+
+            t = tf.transpose(inputs, perm=[1, 2, 0, 3])
+            reshaped = tf.reshape(t, [t.shape[0].value, -1, t.shape[2].value * t.shape[3].value])
+
+        all_outputs = list()
+        all_weights = list()
+        all_biases = list()
+
+        scope_prefix = tfname_prefix or 'fc_'
+
+        for i in range(num_outputs):
+            with tf.name_scope(f'{scope_prefix}{i + 1}'):
+                (outputs, w1, b1, w2, b2) = self._weight(reshaped, activation_size=activation_size, activation=tf.nn.relu, out_size=out_size)
+                all_outputs.append(outputs)
+                all_weights.extend([w1, w2])
+                all_biases.extend([b1, b2])
+
+        return (all_outputs, all_weights, all_biases)
+
     def _generator(self):
-        with tf.name_scope('generator_activation'):
-            g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
+        with tf.device('/GPU:0'):
+            with tf.name_scope('generator'):
+                self._tf.g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
 
-            (outputs, w1, b1, w2, b2) = self._weight([g_input], out_size=self._c.flat_dim)
-            
-            self._tf.g_input = g_input
-            self._tf.g_train_vars = [w1, w2, b1, b2]
+                (fc1_outs, fc1_w, fc1_b) = self._fully_connect([[self._tf.g_input]], 3, out_size=128, tfname_prefix='fc1_')
+                
+                (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 1, out_size=self._c.flat_dim, tfname_prefix='fc2_')
 
-            t_out = outputs[0]
-            out_shape = [-1, self._c.y_dim, self._c.x_dim, self._c.depth]
-            self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
+                self._tf.g_train_vars = fc1_w + fc1_b + fc2_w + fc2_b
+
+                out_shape = [-1, self._c.y_dim, self._c.x_dim, self._c.depth]
+                t_out = fc2_outs[0]
+                self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
 
     def _discriminator(self):
-        with tf.name_scope('discriminator_activation'):
+        with tf.name_scope('discriminator'):
             real_input = tf.placeholder(tf.float32, shape=[None, self._c.y_dim, self._c.x_dim, self._c.depth], name='input')
             
             real_flat = tf.reshape(real_input, [-1, self._c.flat_dim])
@@ -222,5 +250,5 @@ class GanModel():
 
 if __name__ == '__main__':
     image_repo = utils.ImageRepository.create_or_open('.data/celeb/cache.tfrecords', '.data/celeb/raw')
-    g = GanModel('bin', x_dim=178, y_dim=218, depth=3)
+    g = GanModel('bin', x_dim=178, y_dim=218, depth=3, learn_rate=0.0003)
     g.run(image_repo)
