@@ -7,15 +7,17 @@ import utils
 
 class GanModel():
 
-    def __init__(self, train_batch_size=32, x_dim=28, y_dim=28, channels=1, noise_dim=64, learn_rate=1e-3):
+    def __init__(self, output_dir, train_batch_size=32, x_dim=28, y_dim=28, depth=1, noise_dim=64, learn_rate=1e-3):
+        self.output_dir = os.path.abspath(output_dir)
+
         self._c = utils.obj()
         self._c.train_batch_size = train_batch_size
         self._c.x_dim = x_dim
         self._c.y_dim = y_dim
-        self._c.channels = channels
+        self._c.depth = depth
         self._c.noise_dim = noise_dim
         self._c.learn_rate = learn_rate
-        self._c.flat_dim = x_dim * y_dim * channels
+        self._c.flat_dim = x_dim * y_dim * depth
 
         self.sess = tf.Session()
 
@@ -28,7 +30,7 @@ class GanModel():
 
         self.sess.run(tf.global_variables_initializer())
 
-    def _xavier_init_(self, size):
+    def _xavier_init(self, size):
         """
         Xavier Init is used to assign initial values to our weights
         you can read more here: https://prateekvjoshi.com/2016/03/29/understanding-xavier-initialization-in-deep-neural-networks/
@@ -66,10 +68,10 @@ class GanModel():
             if out_size == -1:
                 out_size = in1
 
-            w1 = tf.Variable(self._xavier_init_([in1, activation_size]), name='weight1')
+            w1 = tf.Variable(self._xavier_init([in1, activation_size]), name='weight1')
             b1 = tf.Variable(tf.zeros(shape=[activation_size]), name='bias1')
 
-            w2 = tf.Variable(self._xavier_init_([activation_size, out_size]), name='weight2')
+            w2 = tf.Variable(self._xavier_init([activation_size, out_size]), name='weight2')
             b2 = tf.Variable(tf.zeros(shape=[out_size]), name='bias2')
 
             outs = list()
@@ -91,15 +93,12 @@ class GanModel():
             self._tf.g_train_vars = [w1, w2, b1, b2]
 
             t_out = outputs[0]
-            out_shape = [-1, self._c.x_dim, self._c.y_dim, self._c.channels]
+            out_shape = [-1, self._c.x_dim, self._c.y_dim, self._c.depth]
             self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
 
     def _discriminator(self):
-        """
-            Creates our discriminator model
-        """
         with tf.name_scope('discriminator_activation'):
-            real_input = tf.placeholder(tf.float32, shape=[None, self._c.x_dim, self._c.y_dim, self._c.channels], name='input')
+            real_input = tf.placeholder(tf.float32, shape=[None, self._c.x_dim, self._c.y_dim, self._c.depth], name='input')
             
             real_flat = tf.reshape(real_input, [-1, self._c.flat_dim])
 
@@ -143,69 +142,85 @@ class GanModel():
 
         return np.random.uniform(-1., 1., size=[batch_size, self._c.noise_dim])
 
-if __name__ == '__main__':
-    g = GanModel()
+    def run(self, image_repo):
+        def output_generated_img(img_arr, out_filename):
+            img_arr = np.array(img_arr * 255, dtype=np.uint8)
+
+            if self._c.depth == 1:
+                # in a 1-channel image, we need to drop the last dimension so it's formatted properly for PIL.Image.fromarray
+                img_arr = img_arr.reshape((img_arr.shape[0], img_arr.shape[1]))
+
+                fmt = 'L'
+            elif self._c.depth == 3:
+                fmt = 'RGB'
+            else:
+                raise os.error(f'Invalid image depth={self._c.depth}')
+
+            img = Image.fromarray(img_arr, fmt)
+            img.save(out_filename)
+
+        def pathto(sub_path):
+            return os.path.join(self.output_dir, sub_path)
+        
+        def nukedir(dir_path):
+            if os.path.exists(dir_path):
+                for f in os.listdir(dir_path):
+                    try:
+                        os.remove(os.path.join(dir_path, f))
+                    except:
+                        pass
+
+        gen_images_dir = pathto('gen')
+        nukedir(gen_images_dir)
+
+        if not os.path.exists(gen_images_dir):
+            os.makedirs(gen_images_dir)
+        
+        nukedir(pathto('tb'))
+        tb_writer = tf.summary.FileWriter(pathto('tb'), self.sess.graph)
+        all_summaries_tensor = tf.summary.merge_all()
     
-    if not os.path.exists('bin/gen'):
-        os.makedirs('bin/gen')
+        dataset = image_repo.get_dataset().repeat(20).batch(g._c.train_batch_size)
 
+        ds_iterator = tf.data.make_one_shot_iterator(dataset)
+        iter_batch = ds_iterator.get_next()
 
-    if os.path.exists('bin/tb'):
-        for f in os.listdir('bin/tb'):
-            os.remove('bin/tb/' + f)
+        global_step = 0
 
-    sess = g.sess
-    summaries = tf.summary.merge_all()
-    writer = tf.summary.FileWriter('bin/tb', sess.graph)
+        try:
+            while True:
+                image_batch = self.sess.run(iter_batch)
 
-    image_repo = utils.ImageRepository.create_or_open('.MNIST_Data/cache.tfrecords', '.MNIST_data/raw')
-    dataset = image_repo.get_dataset().repeat(20).batch(g._c.train_batch_size).prefetch(1000)
+                generated_images, g_loss, d_loss, _, _, summary_result = self.sess.run([
+                    g._tf.g_output,
+                    g._tf.g_loss,
+                    g._tf.d_loss,
+                    g._tf.g_solver,
+                    g._tf.d_solver,
+                    all_summaries_tensor
+                ], feed_dict={
+                    g._tf.d_input: image_batch,
+                    g._tf.g_input: g.generate_noise(len(image_batch))
+                })
 
-    ds_iterator = tf.data.make_one_shot_iterator(dataset)
-    iter_batch = ds_iterator.get_next()
+                tb_writer.add_summary(summary_result, global_step=global_step)
 
-    it = 0
-    try:
-        while True:
-            image_batch = sess.run(iter_batch)
-
-            gen, g_loss, d_loss, _, _, summary = sess.run([
-                g._tf.g_output,
-                g._tf.g_loss,
-                g._tf.d_loss,
-                g._tf.g_solver,
-                g._tf.d_solver,
-                summaries
-            ], feed_dict={
-                g._tf.d_input: image_batch,
-                g._tf.g_input: g.generate_noise(len(image_batch))
-            })
-
-            writer.add_summary(summary, global_step=it)
-
-            if it % 500 == 0:
-                print(f'it={it}, g_loss={g_loss:.4}, d_loss={d_loss:.4}')
-
-                out_img_it = 1
-                for i in gen:
-                    img_arr = np.array(i * 255, dtype=np.uint8)
-
-                    if g._c.channels == 1:
-                        # in a 1-channel image, we need to drop the last dimension so it's formatted properly for PIL.Image.fromarray
-                        img_arr = img_arr.reshape((img_arr.shape[0], img_arr.shape[1]))
-
-                        fmt = 'L'
-                    elif g._c.channels == 3:
-                        fmt = 'RGB'
-
-                    img = Image.fromarray(img_arr, fmt)
-                    img.save(f'bin/gen/{it}_{out_img_it}.png')
+                if global_step % 500 == 0:
+                    print(f'global_step={global_step}, g_loss={g_loss:.4}, d_loss={d_loss:.4}')
                     
-                    if out_img_it >= 3:
-                        break
+                    out_img_it = 1
+                    for gen_img in generated_images:
+                        if out_img_it > 3:
+                            break
+                        outimg_name = pathto(f'gen/{global_step}_{out_img_it}.png')
+                        output_generated_img(gen_img, outimg_name)
+                        out_img_it += 1
 
-                    out_img_it += 1
+                global_step += 1
+        except tf.errors.OutOfRangeError:
+            pass
 
-            it += 1
-    except tf.errors.OutOfRangeError:
-        pass
+if __name__ == '__main__':
+    image_repo = utils.ImageRepository.create_or_open('.MNIST_data/cache.tfrecords', '.MNIST_data/raw')
+    g = GanModel('bin')
+    g.run(image_repo)
