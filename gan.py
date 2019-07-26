@@ -103,7 +103,7 @@ class GanModel():
         for i in range(num_outputs):
             with tf.name_scope(f'{scope_prefix}{i + 1}'):
                 (outputs, w1, b1, w2, b2) = self._weight(reshaped, activation_size=activation_size, activation=tf.nn.relu, out_size=out_size)
-                all_outputs.append(outputs)
+                all_outputs.append(tf.transpose(outputs, [1, 0, 2]))
                 all_weights.extend([w1, w2])
                 all_biases.extend([b1, b2])
 
@@ -158,8 +158,27 @@ class GanModel():
                 self._tf.d_output_real = outputs[0]
                 self._tf.d_output_fake = outputs[1]
 
+        def two_layer_fc():
+            with tf.device('/GPU:0'):
+                real_input = tf.placeholder(tf.float32, shape=[None, self._c.y_dim, self._c.x_dim, self._c.depth], name='input')
+                
+                real_flat = tf.reshape(real_input, [-1, self._c.flat_dim])
+
+                fake_input = self._tf.g_output
+
+                fake_flat = tf.reshape(fake_input, [-1, self._c.flat_dim])
+
+                (fc1_outs, fc1_w, fc1_b) = self._fully_connect([[real_flat, fake_flat]], 3, out_size=128, tfname_prefix='fc1_')
+                
+                (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 1, out_size=1, tfname_prefix='fc2_')
+
+                self._tf.d_input = real_input
+                self._tf.d_train_vars = fc1_w + fc1_b + fc2_w + fc2_b
+                self._tf.d_output_real = fc2_outs[0][0]
+                self._tf.d_output_fake = fc2_outs[0][1]
+
         with tf.name_scope('discriminator'):
-            single_weight()
+            two_layer_fc()
 
     def _loss(self):
         def log(x):
@@ -262,11 +281,11 @@ class GanModel():
                     if global_step <= 0:
                         perf_str = ''
                     elif steps_per_second >= 1.0:
-                        perf_str = f', steps_per_second={steps_per_second:.2}'
+                        perf_str = f', steps_per_second={steps_per_second:.2f}'
                     else:
-                        perf_str = f', steps_per_minute={steps_per_second*60:.2}'
+                        perf_str = f', steps_per_minute={steps_per_second*60:.2f}'
 
-                    print(f'global_step={global_step}, g_loss={g_loss:.4}, d_loss={d_loss:.4}{perf_str}')
+                    print(f'global_step={global_step}, g_loss={g_loss:.3f}, d_loss={d_loss:.3f}{perf_str}')
                     
                     out_img_it = 1
                     for gen_img in generated_images:
