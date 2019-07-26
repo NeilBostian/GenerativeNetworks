@@ -159,7 +159,7 @@ if __name__ == '__main__':
     writer = tf.summary.FileWriter('bin/tb', sess.graph)
 
     image_repo = utils.ImageRepository.create_or_open('.MNIST_Data/cache.tfrecords', '.MNIST_data/raw')
-    dataset = image_repo.get_dataset().repeat(20).batch(g._c.train_batch_size)
+    dataset = image_repo.get_dataset().repeat(20).batch(g._c.train_batch_size).prefetch(1000)
 
     ds_iterator = tf.data.make_one_shot_iterator(dataset)
     iter_batch = ds_iterator.get_next()
@@ -183,21 +183,28 @@ if __name__ == '__main__':
 
             writer.add_summary(summary, global_step=it)
 
-            if it % 100 == 0:
-                img_arr = np.array(gen[0] * 255, dtype=np.uint8)
-
+            if it % 500 == 0:
                 print(f'it={it}, g_loss={g_loss:.4}, d_loss={d_loss:.4}')
 
-                if g._c.channels == 1:
-                    # in a 1-channel image, we need to drop the last dimension so it's formatted properly for PIL.Image.fromarray
-                    img_arr = img_arr.reshape((img_arr.shape[0], img_arr.shape[1]))
+                out_img_it = 1
+                for i in gen:
+                    img_arr = np.array(i * 255, dtype=np.uint8)
 
-                    fmt = 'L'
-                elif g._c.channels == 3:
-                    fmt = 'RGB'
+                    if g._c.channels == 1:
+                        # in a 1-channel image, we need to drop the last dimension so it's formatted properly for PIL.Image.fromarray
+                        img_arr = img_arr.reshape((img_arr.shape[0], img_arr.shape[1]))
 
-                img = Image.fromarray(img_arr, fmt)
-                img.save(f'bin/gen/{it}.png')
+                        fmt = 'L'
+                    elif g._c.channels == 3:
+                        fmt = 'RGB'
+
+                    img = Image.fromarray(img_arr, fmt)
+                    img.save(f'bin/gen/{it}_{out_img_it}.png')
+                    
+                    if out_img_it >= 3:
+                        break
+
+                    out_img_it += 1
 
             it += 1
     except tf.errors.OutOfRangeError:
