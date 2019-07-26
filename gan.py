@@ -93,12 +93,12 @@ class GanModel():
             self._tf.g_train_vars = [w1, w2, b1, b2]
 
             t_out = outputs[0]
-            out_shape = [-1, self._c.x_dim, self._c.y_dim, self._c.depth]
+            out_shape = [-1, self._c.y_dim, self._c.x_dim, self._c.depth]
             self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
 
     def _discriminator(self):
         with tf.name_scope('discriminator_activation'):
-            real_input = tf.placeholder(tf.float32, shape=[None, self._c.x_dim, self._c.y_dim, self._c.depth], name='input')
+            real_input = tf.placeholder(tf.float32, shape=[None, self._c.y_dim, self._c.x_dim, self._c.depth], name='input')
             
             real_flat = tf.reshape(real_input, [-1, self._c.flat_dim])
 
@@ -205,7 +205,7 @@ class GanModel():
 
                 tb_writer.add_summary(summary_result, global_step=global_step)
 
-                if global_step % 500 == 0:
+                if global_step % 50 == 0:
                     print(f'global_step={global_step}, g_loss={g_loss:.4}, d_loss={d_loss:.4}')
                     
                     out_img_it = 1
@@ -221,6 +221,6 @@ class GanModel():
             pass
 
 if __name__ == '__main__':
-    image_repo = utils.ImageRepository.create_or_open('.data/mnist/cache.tfrecords', '.data/mnist/raw')
-    g = GanModel('bin')
+    image_repo = utils.ImageRepository.create_or_open('.data/celeb/cache.tfrecords', '.data/celeb/raw')
+    g = GanModel('bin', x_dim=178, y_dim=218, depth=3)
     g.run(image_repo)
