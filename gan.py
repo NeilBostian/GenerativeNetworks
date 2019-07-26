@@ -221,6 +221,6 @@ class GanModel():
             pass
 
 if __name__ == '__main__':
-    image_repo = utils.ImageRepository.create_or_open('.MNIST_data/cache.tfrecords', '.MNIST_data/raw')
+    image_repo = utils.ImageRepository.create_or_open('.data/mnist/cache.tfrecords', '.data/mnist/raw')
     g = GanModel('bin')
     g.run(image_repo)
