@@ -78,7 +78,7 @@ class GanModel():
                 act = activation(tf.matmul(t_in, w1) + b1)
                 return tf.matmul(act, w2) + b2
 
-            outs = tf.map_fn(apply_weight, inputs, dtype=tf.float32)
+            outs = tf.transpose(tf.map_fn(apply_weight, inputs, dtype=tf.float32), [1, 0, 2])
 
             return (outs, w1, b1, w2, b2)
 
@@ -110,8 +110,21 @@ class GanModel():
         return (all_outputs, all_weights, all_biases)
 
     def _generator(self):
-        with tf.device('/GPU:0'):
-            with tf.name_scope('generator'):
+        def single_weight():
+            with tf.device('/cpu:0'):
+                g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
+
+                (outputs, w1, b1, w2, b2) = self._weight([g_input], out_size=self._c.flat_dim)
+                
+                self._tf.g_input = g_input
+                self._tf.g_train_vars = [w1, w2, b1, b2]
+
+                t_out = outputs[0]
+                out_shape = [-1, self._c.y_dim, self._c.x_dim, self._c.depth]
+                self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
+
+        def two_layer_fc():
+            with tf.device('/GPU:0'):
                 self._tf.g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
 
                 (fc1_outs, fc1_w, fc1_b) = self._fully_connect([[self._tf.g_input]], 3, out_size=128, tfname_prefix='fc1_')
@@ -124,22 +137,29 @@ class GanModel():
                 t_out = fc2_outs[0]
                 self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
 
+        with tf.name_scope('generator'):
+            single_weight()
+
     def _discriminator(self):
+        def single_weight():
+            with tf.device('/cpu:0'):
+                real_input = tf.placeholder(tf.float32, shape=[None, self._c.y_dim, self._c.x_dim, self._c.depth], name='input')
+                
+                real_flat = tf.reshape(real_input, [-1, self._c.flat_dim])
+
+                fake_input = self._tf.g_output
+
+                fake_flat = tf.reshape(fake_input, [-1, self._c.flat_dim])
+
+                (outputs, w1, b1, w2, b2) = self._weight([real_flat, fake_flat], out_size=1)
+
+                self._tf.d_input = real_input
+                self._tf.d_train_vars = [w1, w2, b1, b2]
+                self._tf.d_output_real = outputs[0]
+                self._tf.d_output_fake = outputs[1]
+
         with tf.name_scope('discriminator'):
-            real_input = tf.placeholder(tf.float32, shape=[None, self._c.y_dim, self._c.x_dim, self._c.depth], name='input')
-            
-            real_flat = tf.reshape(real_input, [-1, self._c.flat_dim])
-
-            fake_input = self._tf.g_output
-
-            fake_flat = tf.reshape(fake_input, [-1, self._c.flat_dim])
-
-            (outputs, w1, b1, w2, b2) = self._weight([real_flat, fake_flat], out_size=1)
-
-            self._tf.d_input = real_input
-            self._tf.d_train_vars = [w1, w2, b1, b2]
-            self._tf.d_output_real = outputs[0]
-            self._tf.d_output_fake = outputs[1]
+            single_weight()
 
     def _loss(self):
         def log(x):
