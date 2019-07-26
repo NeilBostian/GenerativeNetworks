@@ -159,14 +159,15 @@ if __name__ == '__main__':
     writer = tf.summary.FileWriter('bin/tb', sess.graph)
 
     image_repo = utils.ImageRepository.create_or_open('.MNIST_Data/cache.tfrecords', '.MNIST_data/raw')
-    dataset = image_repo.get_dataset().repeat(5).batch(g._c.train_batch_size)
+    dataset = image_repo.get_dataset().repeat(20).batch(g._c.train_batch_size)
 
     ds_iterator = tf.data.make_one_shot_iterator(dataset)
+    iter_batch = ds_iterator.get_next()
 
     it = 0
     try:
         while True:
-            image_batch = sess.run(ds_iterator.get_next())
+            image_batch = sess.run(iter_batch)
 
             gen, g_loss, d_loss, _, _, summary = sess.run([
                 g._tf.g_output,
@@ -185,7 +186,7 @@ if __name__ == '__main__':
             if it % 100 == 0:
                 img_arr = np.array(gen[0] * 255, dtype=np.uint8)
 
-                print(f'it={it}, g_loss={g_loss:.4}, d_loss={d_loss:.4}, gen.shape={gen.shape}')
+                print(f'it={it}, g_loss={g_loss:.4}, d_loss={d_loss:.4}')
 
                 if g._c.channels == 1:
                     # in a 1-channel image, we need to drop the last dimension so it's formatted properly for PIL.Image.fromarray
