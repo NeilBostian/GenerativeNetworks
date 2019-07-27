@@ -73,7 +73,10 @@ class GanModel():
         )
         """
         with tf.name_scope('weight'):
-            in1 = inputs[0].shape[1].value
+            if type(inputs) == list:
+                inputs = tf.convert_to_tensor(inputs)
+
+            in1 = inputs.shape[2].value
 
             if out_size == -1:
                 out_size = in1
@@ -84,40 +87,43 @@ class GanModel():
             w2 = tf.Variable(self._xavier_init([activation_size, out_size]), name='weight2')
             b2 = tf.Variable(tf.zeros(shape=[out_size]), name='bias2')
 
-            def apply_weight(t_in):
+            outputs = list()
+
+            for i in range(inputs.shape[0].value):
+                t_in = inputs[i]
                 act = activation(tf.matmul(t_in, w1) + b1)
-                return tf.matmul(act, w2) + b2
+                t_out = tf.matmul(act, w2) + b2
+                outputs.append(t_out)
 
-            outs = tf.transpose(tf.map_fn(apply_weight, inputs, dtype=tf.float32), [1, 0, 2])
-
-            return (outs, w1, b1, w2, b2)
+            return (tf.convert_to_tensor(outputs), w1, b1, w2, b2)
 
     def _fully_connect(self, inputs, num_outputs, activation_size=128, activation=tf.nn.relu, out_size=-1, tfname_prefix=None):
         """
             Takes a 4-D list of inputs and fully connects them to `num_outputs` nodes. Each output
             node returns the same shape as one of the input nodes.
         """
-        with tf.name_scope('transpose'):
-            if out_size == -1:
-                out_size = inputs[0][0][0].shape[0].value
-
-            t = tf.transpose(inputs, perm=[1, 2, 0, 3])
-            reshaped = tf.reshape(t, [t.shape[0].value, -1, t.shape[2].value * t.shape[3].value])
-
-        all_outputs = list()
-        all_weights = list()
-        all_biases = list()
-
         scope_prefix = tfname_prefix or 'fc_'
 
-        for i in range(num_outputs):
-            with tf.name_scope(f'{scope_prefix}{i + 1}'):
-                (outputs, w1, b1, w2, b2) = self._weight(reshaped, activation_size=activation_size, activation=tf.nn.relu, out_size=out_size)
-                all_outputs.append(tf.transpose(outputs, [1, 0, 2]))
-                all_weights.extend([w1, w2])
-                all_biases.extend([b1, b2])
+        with tf.name_scope(f'{scope_prefix}'):
+            with tf.name_scope(f'{scope_prefix}transpose'):
+                if out_size == -1:
+                    out_size = inputs[0][0][0].shape[0].value
 
-        return (all_outputs, all_weights, all_biases)
+                t = tf.transpose(inputs, perm=[1, 2, 0, 3])
+                reshaped = tf.reshape(t, [t.shape[0].value, -1, t.shape[2].value * t.shape[3].value])
+
+            all_outputs = list()
+            all_weights = list()
+            all_biases = list()
+
+            for i in range(num_outputs):
+                with tf.name_scope(f'{scope_prefix}{i + 1}'):
+                    (outputs, w1, b1, w2, b2) = self._weight(reshaped, activation_size=activation_size, activation=tf.nn.relu, out_size=out_size)
+                    all_outputs.append(outputs)
+                    all_weights.extend([w1, w2])
+                    all_biases.extend([b1, b2])
+
+            return (all_outputs, all_weights, all_biases)
 
     def _generator(self):
         def single_weight():
@@ -177,12 +183,14 @@ class GanModel():
 
             (fc1_outs, fc1_w, fc1_b) = self._fully_connect([[real_flat, fake_flat]], 3, out_size=128, tfname_prefix='fc1_')
 
-            (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 1, out_size=1, tfname_prefix='fc2_')
+            (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 3, out_size=128, tfname_prefix='fc2_')
+
+            (fc3_outs, fc3_w, fc3_b) = self._fully_connect(fc2_outs, 1, out_size=1, tfname_prefix='fc3_')
 
             self._tf.d_input = real_input
-            self._tf.d_train_vars = fc1_w + fc1_b + fc2_w + fc2_b
-            self._tf.d_output_real = fc2_outs[0][0]
-            self._tf.d_output_fake = fc2_outs[0][1]
+            self._tf.d_train_vars = fc1_w + fc1_b + fc2_w + fc2_b + fc3_w + fc3_b
+            self._tf.d_output_real = fc3_outs[0][0]
+            self._tf.d_output_fake = fc3_outs[0][1]
 
         with tf.name_scope('discriminator'):
             with dev_main():
@@ -313,5 +321,5 @@ class GanModel():
 
 if __name__ == '__main__':
     image_repo = utils.ImageRepository.create_or_open('.data/celeb/cache.tfrecords', '.data/celeb/raw')
-    g = GanModel('bin', x_dim=178, y_dim=218, depth=3, learn_rate=0.0003)
-    g.run(image_repo)
+    g = GanModel('bin', x_dim=178, y_dim=218, depth=3, learn_rate=0.0002)
+    g.run(image_repo) 
