@@ -118,7 +118,7 @@ class GanModel():
 
             for i in range(num_outputs):
                 with tf.name_scope(f'{scope_prefix}{i + 1}'):
-                    (outputs, w1, b1, w2, b2) = self._weight(reshaped, activation_size=activation_size, activation=tf.nn.relu, out_size=out_size)
+                    (outputs, w1, b1, w2, b2) = self._weight(reshaped, activation_size=activation_size, activation=activation, out_size=out_size)
                     all_outputs.append(outputs)
                     all_weights.extend([w1, w2])
                     all_biases.extend([b1, b2])
@@ -136,20 +136,7 @@ class GanModel():
 
             t_out = outputs[0]
             out_shape = [-1, self._c.y_dim, self._c.x_dim, self._c.depth]
-            self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
-
-        def two_layer_fc():
-            self._tf.g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
-
-            (fc1_outs, fc1_w, fc1_b) = self._fully_connect([[self._tf.g_input]], 3, out_size=128, tfname_prefix='fc1_')
-            
-            (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 1, out_size=self._c.flat_dim, tfname_prefix='fc2_')
-
-            self._tf.g_train_vars = fc1_w + fc1_b + fc2_w + fc2_b
-
-            out_shape = [-1, self._c.y_dim, self._c.x_dim, self._c.depth]
-            t_out = fc2_outs[0]
-            self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
+            self._tf.g_output = tf.reshape(tf.nn.sigmoid(t_out), out_shape)
 
         with tf.name_scope('generator'):
             with dev_main():
@@ -183,7 +170,7 @@ class GanModel():
 
             (fc1_outs, fc1_w, fc1_b) = self._fully_connect([[real_flat, fake_flat]], 3, out_size=128, tfname_prefix='fc1_')
 
-            (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 3, out_size=128, tfname_prefix='fc2_')
+            (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 3, out_size=32, tfname_prefix='fc2_')
 
             (fc3_outs, fc3_w, fc3_b) = self._fully_connect(fc2_outs, 1, out_size=1, tfname_prefix='fc3_')
 
@@ -221,7 +208,7 @@ class GanModel():
         with cpu():
             tf.summary.scalar('Generator Loss', self._tf.g_loss)
             tf.summary.scalar('Discriminator Loss', self._tf.d_loss)
-            tf.summary.image('Generated Image', self._tf.g_output)
+            #tf.summary.image('Generated Image', self._tf.g_output)
 
     def generate_noise(self, batch_size=-1):
         if batch_size == -1:
@@ -267,11 +254,10 @@ class GanModel():
         tb_writer = tf.summary.FileWriter(pathto('tb'), self.sess.graph)
         all_summaries_tensor = tf.summary.merge_all()
     
-        dataset = image_repo.get_dataset().repeat(20).batch(g._c.train_batch_size)
+        dataset = image_repo.get_dataset().repeat(100).batch(self._c.train_batch_size)
 
         ds_iterator = tf.data.make_one_shot_iterator(dataset)
         iter_batch = ds_iterator.get_next()
-
 
         try:
             global_step = 0
@@ -281,15 +267,15 @@ class GanModel():
                 image_batch = self.sess.run(iter_batch)
 
                 generated_images, g_loss, d_loss, _, _, summary_result = self.sess.run([
-                    g._tf.g_output,
-                    g._tf.g_loss,
-                    g._tf.d_loss,
-                    g._tf.g_solver,
-                    g._tf.d_solver,
+                    self._tf.g_output,
+                    self._tf.g_loss,
+                    self._tf.d_loss,
+                    self._tf.g_solver,
+                    self._tf.d_solver,
                     all_summaries_tensor
                 ], feed_dict={
-                    g._tf.d_input: image_batch,
-                    g._tf.g_input: g.generate_noise(len(image_batch))
+                    self._tf.d_input: image_batch,
+                    self._tf.g_input: self.generate_noise(len(image_batch))
                 })
 
                 tb_writer.add_summary(summary_result, global_step=global_step)
@@ -320,6 +306,14 @@ class GanModel():
             pass
 
 if __name__ == '__main__':
-    image_repo = utils.ImageRepository.create_or_open('.data/celeb/cache.tfrecords', '.data/celeb/raw')
-    g = GanModel('bin', x_dim=178, y_dim=218, depth=3, learn_rate=0.0002)
-    g.run(image_repo) 
+    def mnist_gan():
+        image_repo = utils.ImageRepository.create_or_open('.data/mnist/cache.tfrecords', '.data/mnist/raw')
+        g = GanModel('bin', x_dim=28, y_dim=28, depth=1, train_batch_size=128, learn_rate=0.001)
+        g.run(image_repo)
+
+    def celeb_gan():
+        image_repo = utils.ImageRepository.create_or_open('.data/celeb/cache.tfrecords', '.data/celeb/raw')
+        g = GanModel('bin', x_dim=178, y_dim=218, depth=3, train_batch_size=128, learn_rate=0.0002)
+        g.run(image_repo)
+
+    celeb_gan()
