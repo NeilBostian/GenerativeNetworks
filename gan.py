@@ -5,6 +5,12 @@ import os
 import time
 import utils
 
+def gpu():
+    return tf.device('/GPU:0')
+
+def cpu():
+    return tf.device('/cpu:0')
+
 class GanModel():
 
     def __init__(self, output_dir, train_batch_size=32, x_dim=28, y_dim=28, depth=1, noise_dim=64, learn_rate=1e-3):
@@ -111,97 +117,99 @@ class GanModel():
 
     def _generator(self):
         def single_weight():
-            with tf.device('/cpu:0'):
-                g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
+            g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
 
-                (outputs, w1, b1, w2, b2) = self._weight([g_input], out_size=self._c.flat_dim)
-                
-                self._tf.g_input = g_input
-                self._tf.g_train_vars = [w1, w2, b1, b2]
+            (outputs, w1, b1, w2, b2) = self._weight([g_input], out_size=self._c.flat_dim)
+            
+            self._tf.g_input = g_input
+            self._tf.g_train_vars = [w1, w2, b1, b2]
 
-                t_out = outputs[0]
-                out_shape = [-1, self._c.y_dim, self._c.x_dim, self._c.depth]
-                self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
+            t_out = outputs[0]
+            out_shape = [-1, self._c.y_dim, self._c.x_dim, self._c.depth]
+            self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
 
         def two_layer_fc():
-            with tf.device('/GPU:0'):
-                self._tf.g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
+            self._tf.g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
 
-                (fc1_outs, fc1_w, fc1_b) = self._fully_connect([[self._tf.g_input]], 3, out_size=128, tfname_prefix='fc1_')
-                
-                (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 1, out_size=self._c.flat_dim, tfname_prefix='fc2_')
+            (fc1_outs, fc1_w, fc1_b) = self._fully_connect([[self._tf.g_input]], 3, out_size=128, tfname_prefix='fc1_')
+            
+            (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 1, out_size=self._c.flat_dim, tfname_prefix='fc2_')
 
-                self._tf.g_train_vars = fc1_w + fc1_b + fc2_w + fc2_b
+            self._tf.g_train_vars = fc1_w + fc1_b + fc2_w + fc2_b
 
-                out_shape = [-1, self._c.y_dim, self._c.x_dim, self._c.depth]
-                t_out = fc2_outs[0]
-                self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
+            out_shape = [-1, self._c.y_dim, self._c.x_dim, self._c.depth]
+            t_out = fc2_outs[0]
+            self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
 
         with tf.name_scope('generator'):
-            single_weight()
+            with gpu():
+                single_weight()
 
     def _discriminator(self):
         def single_weight():
-            with tf.device('/cpu:0'):
-                real_input = tf.placeholder(tf.float32, shape=[None, self._c.y_dim, self._c.x_dim, self._c.depth], name='input')
-                
-                real_flat = tf.reshape(real_input, [-1, self._c.flat_dim])
+            real_input = tf.placeholder(tf.float32, shape=[None, self._c.y_dim, self._c.x_dim, self._c.depth], name='input')
+            
+            real_flat = tf.reshape(real_input, [-1, self._c.flat_dim])
 
-                fake_input = self._tf.g_output
+            fake_input = self._tf.g_output
 
-                fake_flat = tf.reshape(fake_input, [-1, self._c.flat_dim])
+            fake_flat = tf.reshape(fake_input, [-1, self._c.flat_dim])
 
-                (outputs, w1, b1, w2, b2) = self._weight([real_flat, fake_flat], out_size=1)
+            (outputs, w1, b1, w2, b2) = self._weight([real_flat, fake_flat], out_size=1)
 
-                self._tf.d_input = real_input
-                self._tf.d_train_vars = [w1, w2, b1, b2]
-                self._tf.d_output_real = outputs[0]
-                self._tf.d_output_fake = outputs[1]
+            self._tf.d_input = real_input
+            self._tf.d_train_vars = [w1, w2, b1, b2]
+            self._tf.d_output_real = outputs[0]
+            self._tf.d_output_fake = outputs[1]
 
         def two_layer_fc():
-            with tf.device('/GPU:0'):
-                real_input = tf.placeholder(tf.float32, shape=[None, self._c.y_dim, self._c.x_dim, self._c.depth], name='input')
-                
-                real_flat = tf.reshape(real_input, [-1, self._c.flat_dim])
+            real_input = tf.placeholder(tf.float32, shape=[None, self._c.y_dim, self._c.x_dim, self._c.depth], name='input')
+            
+            real_flat = tf.reshape(real_input, [-1, self._c.flat_dim])
 
-                fake_input = self._tf.g_output
+            fake_input = self._tf.g_output
 
-                fake_flat = tf.reshape(fake_input, [-1, self._c.flat_dim])
+            fake_flat = tf.reshape(fake_input, [-1, self._c.flat_dim])
 
-                (fc1_outs, fc1_w, fc1_b) = self._fully_connect([[real_flat, fake_flat]], 3, out_size=128, tfname_prefix='fc1_')
-                
-                (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 1, out_size=1, tfname_prefix='fc2_')
+            (fc1_outs, fc1_w, fc1_b) = self._fully_connect([[real_flat, fake_flat]], 3, out_size=128, tfname_prefix='fc1_')
+            
+            (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 1, out_size=1, tfname_prefix='fc2_')
 
-                self._tf.d_input = real_input
-                self._tf.d_train_vars = fc1_w + fc1_b + fc2_w + fc2_b
-                self._tf.d_output_real = fc2_outs[0][0]
-                self._tf.d_output_fake = fc2_outs[0][1]
+            self._tf.d_input = real_input
+            self._tf.d_train_vars = fc1_w + fc1_b + fc2_w + fc2_b
+            self._tf.d_output_real = fc2_outs[0][0]
+            self._tf.d_output_fake = fc2_outs[0][1]
 
         with tf.name_scope('discriminator'):
-            two_layer_fc()
+            with gpu():
+                two_layer_fc()
 
     def _loss(self):
         def log(x):
             return tf.log(x + 1e-8)
 
-        with tf.name_scope('loss'):
-            d_real = self._tf.d_output_real
-            d_fake = self._tf.d_output_fake
+        with gpu():
+            with tf.name_scope('loss'):
+                d_real = self._tf.d_output_real
+                d_fake = self._tf.d_output_fake
 
-            with tf.name_scope('cross'):
-                cross = tf.reduce_sum(tf.exp(-d_real)) + tf.reduce_sum(tf.exp(-d_fake))
-            
-            with tf.name_scope('generator'):
-                g_target = 1./(self._c.train_batch_size*2)
-                self._tf.g_loss = tf.reduce_sum(g_target * d_real) + tf.reduce_sum(g_target * d_fake) + log(cross)
-                self._tf.g_solver = tf.train.AdamOptimizer(learning_rate=self._c.learn_rate).minimize(self._tf.g_loss, var_list=self._tf.g_train_vars)
+                with tf.name_scope('cross'):
+                    cross = tf.reduce_sum(tf.exp(-d_real)) + tf.reduce_sum(tf.exp(-d_fake))
                 
-                tf.summary.scalar('loss', self._tf.g_loss)
+                with tf.name_scope('generator'):
+                    g_target = 1./(self._c.train_batch_size*2)
+                    self._tf.g_loss = tf.reduce_sum(g_target * d_real) + tf.reduce_sum(g_target * d_fake) + log(cross)
+                    self._tf.g_solver = tf.train.AdamOptimizer(learning_rate=self._c.learn_rate).minimize(self._tf.g_loss, var_list=self._tf.g_train_vars)
+                    
+                with tf.name_scope('discriminator'):
+                    d_target = 1./self._c.train_batch_size
+                    self._tf.d_loss = tf.reduce_sum(d_target * d_real) + log(cross)
+                    self._tf.d_solver = tf.train.AdamOptimizer(learning_rate=self._c.learn_rate).minimize(self._tf.d_loss, var_list=self._tf.d_train_vars)
 
-            with tf.name_scope('discriminator'):
-                d_target = 1./self._c.train_batch_size
-                self._tf.d_loss = tf.reduce_sum(d_target * d_real) + log(cross)
-                self._tf.d_solver = tf.train.AdamOptimizer(learning_rate=self._c.learn_rate).minimize(self._tf.d_loss, var_list=self._tf.d_train_vars)
+        with cpu():
+            tf.summary.scalar('Generator Loss', self._tf.g_loss)
+            tf.summary.scalar('Discriminator Loss', self._tf.d_loss)
+            tf.summary.image('Generated Image', self._tf.g_output)
 
     def generate_noise(self, batch_size=-1):
         if batch_size == -1:
