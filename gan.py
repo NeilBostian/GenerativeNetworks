@@ -11,6 +11,10 @@ def gpu():
 def cpu():
     return tf.device('/cpu:0')
 
+def dev_main():
+    """The device for the main graph ops"""
+    return gpu()
+
 class GanModel():
 
     def __init__(self, output_dir, train_batch_size=32, x_dim=28, y_dim=28, depth=1, noise_dim=64, learn_rate=1e-3):
@@ -95,7 +99,7 @@ class GanModel():
         """
         with tf.name_scope('transpose'):
             if out_size == -1:
-                out_size = inputs.shape[3].value
+                out_size = inputs[0][0][0].shape[0].value
 
             t = tf.transpose(inputs, perm=[1, 2, 0, 3])
             reshaped = tf.reshape(t, [t.shape[0].value, -1, t.shape[2].value * t.shape[3].value])
@@ -142,7 +146,7 @@ class GanModel():
             self._tf.g_output = tf.nn.sigmoid(tf.reshape(t_out, out_shape))
 
         with tf.name_scope('generator'):
-            with gpu():
+            with dev_main():
                 single_weight()
 
     def _discriminator(self):
@@ -172,7 +176,7 @@ class GanModel():
             fake_flat = tf.reshape(fake_input, [-1, self._c.flat_dim])
 
             (fc1_outs, fc1_w, fc1_b) = self._fully_connect([[real_flat, fake_flat]], 3, out_size=128, tfname_prefix='fc1_')
-            
+
             (fc2_outs, fc2_w, fc2_b) = self._fully_connect(fc1_outs, 1, out_size=1, tfname_prefix='fc2_')
 
             self._tf.d_input = real_input
@@ -181,14 +185,14 @@ class GanModel():
             self._tf.d_output_fake = fc2_outs[0][1]
 
         with tf.name_scope('discriminator'):
-            with gpu():
+            with dev_main():
                 two_layer_fc()
 
     def _loss(self):
         def log(x):
             return tf.log(x + 1e-8)
 
-        with gpu():
+        with dev_main():
             with tf.name_scope('loss'):
                 d_real = self._tf.d_output_real
                 d_fake = self._tf.d_output_fake
