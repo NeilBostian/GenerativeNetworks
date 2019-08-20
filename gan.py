@@ -125,6 +125,14 @@ class GanModel():
 
             return (all_outputs, all_weights, all_biases)
 
+    def conv2d(self, input, filters, strides=1):
+        all_outputs = list()
+
+        for f in filters:
+            tf.nn.relu(tf.nn.conv2d(input, f, strides=[1, strides, strides, 1], padding='SAME'))
+
+        return all_outputs
+
     def _generator(self):
         def single_weight():
             g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
