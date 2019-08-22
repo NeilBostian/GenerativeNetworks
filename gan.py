@@ -134,6 +134,26 @@ class GanModel():
         return all_outputs
 
     def _generator(self):
+        def conv2d_transpose():
+            g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
+
+            (outputs, w1, b1, w2, b2) = self._weight([g_input], out_size=self._c.flat_dim)
+            
+            t_out = outputs[0]
+
+            weighted_out = tf.reshape(tf.nn.sigmoid(t_out), [-1, self._c.y_dim, self._c.x_dim, self._c.depth])
+
+            conv2d_filter = tf.Variable(self._xavier_init([self._c.y_dim, self._c.x_dim, self._c.depth, self._c.depth]), name='x')
+
+            self._tf.g_input = g_input
+
+            self._tf.g_train_vars = [w1, w2, b1, b2, conv2d_filter]
+
+            self._tf.g_output = tf.nn.conv2d_transpose(value=weighted_out,
+                filter=conv2d_filter,
+                output_shape=[tf.shape(g_input)[0], self._c.y_dim, self._c.x_dim, self._c.depth],
+                strides=[1, 1, 1, 1])
+
         def single_weight():
             g_input = tf.placeholder(tf.float32, shape=[None, self._c.noise_dim], name='input')
 
