@@ -15,10 +15,10 @@ class Weight():
         self.activation = activation
         self.activation_size = activation_size
 
-        self.weight1 = tf.Variable(xavier_init([in_size, activation_size]))
-        self.bias1 = tf.Variable(tf.zeros(shape=[activation_size]))
-        self.weight2 = tf.Variable(xavier_init([activation_size, out_size]))
-        self.bias2 = tf.Variable(tf.zeros(shape=[out_size]))
+        self.weight1 = tf.Variable(xavier_init([in_size, activation_size]), name='weight1')
+        self.bias1 = tf.Variable(tf.zeros(shape=[activation_size]), name='bias1')
+        self.weight2 = tf.Variable(xavier_init([activation_size, out_size]), name='weight2')
+        self.bias2 = tf.Variable(tf.zeros(shape=[out_size]), name='bias2')
 
     def apply(self, t_in):
         assert(t_in.shape[1] == self.in_size)
