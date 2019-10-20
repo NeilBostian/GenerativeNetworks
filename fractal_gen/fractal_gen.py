@@ -22,12 +22,12 @@ class FractalGenTensorflowModel():
         xs = self._in_xs
         zs = self._in_zs
         
-        ns = tf.zeros_like(xs)
+        ns = tf.zeros_like(xs, tf.float32)
 
         def apply_loop(x_in, z_in, n_in):
-            b = tf.convert_to_tensor(tf.abs(z_in) < self._R, name='b')
-            z_out = tf.where(b, z_in**2 + x_in, z_in)
-            n_out = n_in + tf.cast(b, tf.float32)
+            z_out = tf.where(tf.abs(z_in) < self._R, z_in**2 + x_in, z_in)
+            n_delta = tf.abs(z_out) < self._R
+            n_out = n_in + tf.cast(n_delta, tf.float32)
             return (z_out, n_out)
 
         for i in range(0, self._ITER_NUM):
@@ -56,12 +56,12 @@ class FractalGenTensorflowModel():
             self._in_xs: np.full(shape=Z.shape, fill_value=c, dtype=Z.dtype),
             self._in_zs: Z,
         })
-        
+
         r, g, b = np.frompyfunc(self._get_color(bg_ratio, ratio), 2, 3)(final_z, final_step)
 
-        img_array = np.dstack((r, g, b))
+        img_array = np.uint8(np.dstack((r, g, b)) * 255)
 
-        return Image.fromarray(np.uint8(img_array * 255))
+        return Image.fromarray(img_array)
 
 class FractalGenModel():
     def __init__(self):        
@@ -80,7 +80,7 @@ class FractalGenModel():
 
         self._tfmodel = FractalGenTensorflowModel(self._Z.shape)
 
-    def generate_sequence(self, iters=100):
+    def generate_sequence(self, iters=60):
         for i in range(0, iters):
             theta = 2 * np.pi / iters * i
             c = -(0.835 - 0.1 * np.cos(theta)) - (0.2321 + 0.1 * np.sin(theta)) * 1j
