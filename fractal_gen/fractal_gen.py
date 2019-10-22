@@ -1,3 +1,4 @@
+from datetime import datetime
 import tensorflow as tf
 import numpy as np
 from PIL import Image
@@ -14,20 +15,23 @@ class FractalGenTensorflowModel():
         self._sess.run(tf.global_variables_initializer())
 
     def _build_model(self, shape_in, dtype_in):
-        self._xs = tf.placeholder(shape=shape_in, dtype=dtype_in, name='xs')
-        self._zs = tf.placeholder(shape=shape_in, dtype=dtype_in, name='zs')
-        self._ns = tf.placeholder(shape=shape_in, dtype=tf.float32, name='ns')
+        with tf.device('/cpu:0'):
+            self._xs = tf.placeholder(shape=[], dtype=dtype_in, name='xs')
+            self._zs = tf.placeholder(shape=shape_in, dtype=dtype_in, name='zs')
 
-        xs = self._xs
-        zs = self._zs
-        ns = self._ns
+            xs = tf.fill(shape_in, self._xs)
+            zs = self._zs
+            ns = tf.zeros(shape=shape_in, dtype=tf.float32)
 
-        zs_next = tf.where(tf.abs(zs) < R, zs**2 + xs, zs)
-        not_diverged = tf.abs(zs_next) < R
-        ns_next = ns + tf.cast(not_diverged, tf.float32)
+            for i in range(0, ITER_NUM):
+                zs_next = tf.where(tf.abs(zs) < R, zs**2 + xs, zs)
+                not_diverged = tf.abs(zs_next) < R
+                ns_next = ns + tf.cast(not_diverged, tf.float32)
+                zs = zs_next
+                ns = ns_next
 
-        self._zs_next = zs_next
-        self._ns_next = ns_next
+            self._zs_next = zs
+            self._ns_next = ns
 
     def _get_color(self, bg_ratio, ratio):
         def color(z, i):
@@ -42,30 +46,22 @@ class FractalGenTensorflowModel():
         return color
 
     def generate_image(self, Z, c, bg_ratio, ratio):
-        sess = self._sess
+        with tf.device('/cpu:0'):
+            sess = self._sess
 
-        xs = sess.run(tf.fill(Z.shape, c))
-        
-        zs_cur = Z
-        ns_cur = sess.run(tf.zeros(shape=Z.shape, dtype=tf.float32))
-
-        for i in range(ITER_NUM):
-            zs_next, ns_next = sess.run([
+            final_z, final_step = sess.run([
                 self._zs_next,
                 self._ns_next
             ], feed_dict={
-                self._xs: xs,
-                self._zs: zs_cur,
-                self._ns: ns_cur
+                self._xs: c,
+                self._zs: Z
             })
-            zs_cur = zs_next
-            ns_cur = ns_next
 
-        r, g, b = np.frompyfunc(self._get_color(bg_ratio, ratio), 2, 3)(zs_cur, ns_cur)
+            r, g, b = np.frompyfunc(self._get_color(bg_ratio, ratio), 2, 3)(final_z, final_step)
 
-        img_array = np.uint8(np.dstack((r, g, b)) * 255)
+            img_array = np.uint8(np.dstack((r, g, b)) * 255)
 
-        return Image.fromarray(img_array)
+            return Image.fromarray(img_array)
 
 class FractalGenModel():
     def __init__(self):        
@@ -85,12 +81,13 @@ class FractalGenModel():
 
         self._tfmodel = FractalGenTensorflowModel(self._Z.shape, self._Z.dtype)
 
-    def generate_sequence(self, iters=3000):
+    def generate_sequence(self, iters=600):
         for i in range(0, iters):
             theta = 2 * np.pi * i / iters
             # c = -(0.835 - 0.1 * np.cos(theta)) - (0.2321 + 0.1 * np.sin(theta)) * 1j
             # c = -0.8 * 1j
             c = -(0.835 - 0.05 * np.cos(theta)) - (0.2321 + 0.05 * np.sin(theta)) * 1j
             y = self._tfmodel.generate_image(self._Z, c, self.bg_ratio, self.ratio)
-            print(f'Fractal gen completed {i+1}/{iters}')
+            y.save(f'imgs/f-{i}.png', 'PNG')
+            print(f'{datetime.now()} Fractal gen completed {i+1}/{iters}')
             yield y

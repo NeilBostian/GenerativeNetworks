@@ -1,9 +1,10 @@
+import tensorflow as tf
 from fractal_gen import FractalGenModel
 import os
-from moviepy.editor import ImageSequenceClip
+from moviepy.editor import ImageSequenceClip, ImageClip, concatenate
 
 
-def gif(filename, array, fps=10, scale=1.0):
+def gif():
     """Creates a gif given a stack of images using moviepy
     Notes
     -----
@@ -25,22 +26,10 @@ def gif(filename, array, fps=10, scale=1.0):
         how much to rescale each image by (default: 1.0)
     """
 
-    # ensure that the file has the .gif extension
-    fname, _ = os.path.splitext(filename)
-    filename = fname + '.gif'
-
-    # copy into the color dimension if the images are black and white
-    if array.ndim == 3:
-        array = array[..., np.newaxis] * np.ones(3)
-
-    # make the moviepy clip
-    clip = ImageSequenceClip(list(array), fps=fps).resize(scale)
-    clip.write_gif(filename, fps=fps)
-    return clip
+    clip = ImageSequenceClip('.data/imgs',fps=24)
+    clip.write_videofile('movie.avi',audio=False,codec='png')
 
 if __name__ == '__main__':
     gen = FractalGenModel()
-    i = 1
     for img in gen.generate_sequence():
-        img.save(f'imgs/f-{i}.png', 'PNG')
-        i += 1
+        break
