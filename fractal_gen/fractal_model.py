@@ -1,74 +1,74 @@
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 import PIL
 
-from image_repository import ImageRepository
+model_weights_path = '.data/fractal_model.data'
+
+def load_image(infilename) :
+    img = PIL.Image.open(infilename)
+    img.load()
+    data = np.asarray(img, dtype="uint8")
+    return (data.astype(dtype="float32") / 255.0)
+
+def save_image(npdata, outfilename):
+    npdata = np.asarray(np.clip(npdata * 255, 0, 255), dtype="uint8")
+    img = PIL.Image.fromarray(npdata, "RGB")
+    img.save(outfilename)
 
 def build_model():
     model = tf.keras.Sequential([
-        keras.layers.Conv2D(filters=3, kernel_size=(3, 3), strides=(1, 1), padding='same', input_shape=(1081, 1920, 3)),
-        keras.layers.Dense(64, activation='relu'),
-        keras.layers.Dense(3, activation='relu')
+        keras.layers.InputLayer(input_shape=(1081, 1920, 3)),
+        keras.layers.Conv2D(filters=16, kernel_size=(3, 3), strides=(1, 1), padding='same'),
+        keras.layers.Dense(16),
+        keras.layers.Conv2D(filters=32, kernel_size=(3, 3), strides=(1, 1), padding='same'),
+        keras.layers.Dense(32),
+        keras.layers.Dense(3)
+        # keras.layers.Conv2D(filters=3, kernel_size=(3, 3), strides=(1, 1), padding='same', input_shape=(1081, 1920, 3)),
+        # keras.layers.Dense(64, activation='relu'),
+        # 
     ])
 
-    model.compile(optimizer='adam',
-                loss='categorical_crossentropy')
+    model.compile(optimizer='adam', loss='categorical_crossentropy')
 
     return model
 
-def get_images():
-    dirname = '.data/imgs_rn/'
+def train():
+    def iterate_train_paths():
+        num_imgs = 1
+        for i in range(0, num_imgs):
+            index = i
+            image_path = f'.data/imgs/f-{i}.png'
 
-    files = [dirname + str(x) for x in sorted([int(y) for y in os.listdir(dirname)])]
-
-    files_shifted = files[1:] + [files[0]]
-
-    for i in range(0, len(files)):
-        yield (files[i], files_shifted[i])
-
-def create_model():
-    def read_img(sess, filename):
-        print('fname:======')
-        print(filename)
-        filename = tf.placeholder(dtype=tf.string)
-        filebytes = tf.read_file(filename)
-        raw_img = tf.image.decode_png(filebytes)
-        as_float = tf.reshape(tf.cast(raw_img, tf.float32) / 255.0, shape=[1081, 1920, 3])
-
-        return sess.run(as_float, feed_dict={filename: filename})
+            next_index = i + 1
+            next_image_path = f'.data/imgs/f-{next_index}.png'
+            yield (image_path, next_image_path)
 
     model = build_model()
-    sess = keras.backend.get_session()
 
-    feed_logits = []
-    feed_labels = []
+    x = np.array([load_image(cur) for cur, nxt in iterate_train_paths()])
+    y = np.array([load_image(nxt) for cur, nxt in iterate_train_paths()])
 
-    for curFilename, nxtFilename in get_images():
-        feed_logits.append(curFilename)
-        feed_labels.append(nxtFilename)
+    for i in range(0, 100):
+        model.fit(x, y, epochs=10)
+        print('saving...')
+        model.save(model_weights_path)
 
-    data = tf.data.Dataset.from_generator(get_images, output_types=tf.string).repeat(10).shuffle(100).batch(16)
+def apply(src_img, iters=15):
+    model = build_model()
+    model.load_weights(model_weights_path)
 
-    ds_iterator = tf.data.make_one_shot_iterator(data)
-    iter_batch = ds_iterator.get_next()
-
-    try:
-        while True:
-            fnames_batch = sess.run(iter_batch)
-            
-            imgs = []
-            labels = []
-
-            for img, label in fnames_batch:
-                imgs.append(read_img(sess, str(img)))
-                labels.append(read_img(sess, str(label)))
-
-            model.fit(imgs, labels)
-    except tf.errors.OutOfRangeError:
-        pass
-
-    model.save('.data/fractal_model.data')
+    x = load_image(src_img).reshape([1, 1081, 1920, 3])
+    
+    for i in range(0, iters):
+        y = model.predict(x)
+        save_image(y.reshape([1081, 1920, 3]), f'.data/gen/gen_sample{i}.png')
+        x = y
 
 if __name__ == '__main__':
-    create_model()
+    #train()
+    apply(".data/gen/original_sample.png")
+
