@@ -4,6 +4,5 @@ Heavily modified version of the code [located here](https://github.com/hzy46/ten
 ### Python environment for fractals
     conda create --name fractals python=3.7.4
     conda activate fractals
-    pip install tensorflow==2.0.0
+    conda install tensorflow-gpu=1.14.0
     conda install pillow=6.2.0
-    pip install moviepy==1.0.1

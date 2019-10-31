@@ -66,12 +66,12 @@ class FractalGenTensorflowModel():
 class FractalGenModel():
     def __init__(self):        
         #input params
-        ratio = 16.0 / 9.0
-        self.start_y = -1.3
-        self.end_y = self.start_y * -1.
-        self.start_x = self.start_y * ratio
-        self.end_x = self.end_y * ratio
-        self.width = 1920 # image width 7680
+        ratio = 9.0 / 16.0
+        self.start_x = -2.3
+        self.end_x = self.start_x * -1.
+        self.start_y = self.start_x * ratio
+        self.end_y = self.end_x * ratio
+        self.width = 1920 # image width
         self.bg_ratio = (4, 2.5, 1) # background color ratio
         self.ratio = (0.9, 0.9, 0.9)
 
@@ -88,6 +88,6 @@ class FractalGenModel():
             # c = -0.8 * 1j
             c = -(0.835 - 0.05 * np.cos(theta)) - (0.2321 + 0.05 * np.sin(theta)) * 1j
             y = self._tfmodel.generate_image(self._Z, c, self.bg_ratio, self.ratio)
-            y.save(f'imgs/f-{i}.png', 'PNG')
+            y.save(f'.data/imgs/f-{i}.png', 'PNG')
             print(f'{datetime.now()} Fractal gen completed {i+1}/{iters}')
             yield y
