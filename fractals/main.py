@@ -3,6 +3,8 @@ from fractal_gen import FractalGenModel
 import os
 from moviepy.editor import ImageSequenceClip, ImageClip, concatenate
 
+snapshot_path = '.data/snapshots'
+cache_path = '.data/fractal_cache'
 
 def gif():
     """Creates a gif given a stack of images using moviepy
