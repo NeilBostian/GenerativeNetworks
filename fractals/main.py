@@ -12,7 +12,13 @@ from train_data import TrainData
 from fractal_gen import FractalGenTensorflowModel
 from fractal_model import build_model
 
-logging.basicConfig(filename='.data/log.txt', filemode='a', format='[%(asctime)s] %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='[%(asctime)s][%(levelname)-5.5s] %(message)s',
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler('.data/log.txt'),
+        logging.StreamHandler()
+    ])
 
 tensorboard_dir = '.data\\tensorboard'
 train_checkpoints_dir = '.data/model_checkpoints'
@@ -92,7 +98,8 @@ def process_sample_images(model, checkpoint):
         logging.info(f'[ckpt={checkpoint}] process sample {img}')
 
         try:
-            x = PIL.Image.load(f'{sample_inputs_dir}/{img}')
+            x = PIL.Image.open(f'{sample_inputs_dir}/{img}')
+            x.load()
             x = preprocess_pil_image(x)
 
             for i in range(1, 6):

@@ -1,4 +1,5 @@
 import os
+import logging
 import random
 import tensorflow as tf
 import numpy as np
@@ -85,20 +86,28 @@ class TrainData():
         fname = self._get_image_path(self._theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
 
         if not os.path.exists(fname):
+            logging.info(f'image does not exist, creating from fractal_gen: {fname}')
             img = self._cache_train_image(self._theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
             return img
         else:
-            return Image.load(fname)
+            logging.info(f'image exists, using cached version: {fname}')
+            img = Image.open(fname)
+            img.load()
+            return img
 
     def get_next_train_image(self):
         next_theta_iter = (self._theta_iter + 1)  % THETA_BOUNDS
         fname = self._get_image_path(next_theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
 
         if not os.path.exists(fname):
+            logging.info(f'image does not exist, creating from fractal_gen: {fname}')
             img = self._cache_train_image(next_theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
             return img
         else:
-            return Image.load(fname)
+            logging.info(f'image exists, using cached version: {fname}')
+            img = Image.open(fname)
+            img.load()
+            return img
 
     def get_random():
         theta_iter = random.randint(0, THETA_BOUNDS - 1)

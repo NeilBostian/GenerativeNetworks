@@ -11,6 +11,9 @@ def build_model():
     def pool2d():
         return keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2), padding='same')
 
+    def dense(units):
+        return keras.layers.Dense(units, activation='relu')
+
     def deconv2d(filter_ct, output_padding=None):
         return keras.layers.Conv2DTranspose(filters=filter_ct, kernel_size=(5, 5), strides=(2, 2), padding='same', output_padding=output_padding)
 
@@ -63,14 +66,14 @@ def build_model():
         pool2d(),
 
         # in [None, 9, 15, 4096]
-        keras.layers.Dense(4096),
+        dense(4096),
 
         # in [None, 9, 15, 4096]
-        keras.layers.Dense(2048),
+        dense(2048),
         dropout(0.15),
 
         # in [None, 9, 15, 2048]
-        keras.layers.Dense(4096),
+        dense(4096),
         
         # in [None, 9, 15, 4096]
         deconv2d(2048, output_padding=(0, 1)),
@@ -92,7 +95,11 @@ def build_model():
         deconv2d(64),
 
         # in [None, 540, 960, 64]
-        deconv2d(3)
+        deconv2d(64),
+
+        # in [None, 1080, 1920, 64]
+        dense(64),
+        dense(3)
 
         # out [None, 1080, 1920, 3]
     ])
