@@ -1,8 +1,9 @@
 import os
-import numpy as np
+import datetime
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
+import numpy as np
 import tensorflow as tf
 import PIL
 
@@ -32,15 +33,24 @@ if not os.path.exists(sample_inputs_dir):
 if not os.path.exists(sample_outputs_dir):
     os.mkdir(sample_outputs_dir)
 
+def log(m):
+
+    m = f'[{datetime.datetime.now()}] {m}'
+
+    print(m)
+
+    with open(".data/log.txt", "a") as myfile:
+        myfile.write(f'{m}\n')
+
 def main():
     model = build_model()
 
     last_checkpoint = get_latest_model_checkpoint()
 
     if last_checkpoint:
-        model.load_weights(f'{train_checkpoints_dir}/{last_checkpoint}')
+        model.load_weights(f'{train_checkpoints_dir}/{last_checkpoint}/model_weights')
 
-    current_checkpoint = last_checkpoint or 1
+    current_checkpoint = (last_checkpoint + 1) or 1
 
     while True:
         process_checkpoint(model, current_checkpoint)
@@ -54,22 +64,39 @@ def get_latest_model_checkpoint():
         return int(ld[-1])
 
 def process_checkpoint(model, checkpoint):
+    log(f'process checkpoint (ckpt) {checkpoint}')
+
     td = TrainData.get_random()
+    
+    log(f'[ckpt={checkpoint}] get feature image')
     feature = preprocess_pil_image(td.get_train_image())
+    
+    log(f'[ckpt={checkpoint}] get label image')
     label = preprocess_pil_image(td.get_next_train_image())
 
+    log(f'[ckpt={checkpoint}] fit model')
     model.fit(feature, label, callbacks=[tb_callback])
 
-    if checkpoint % 5 == 0:
-        model.save_weights(f'{train_checkpoints_dir}/{checkpoint}')
+    if checkpoint % 20 == 0:
+        save_checkpoint(model, checkpoint)
 
     if checkpoint % 100 == 0:
         process_sample_images(model, checkpoint)
+
+def save_checkpoint(model, checkpoint):
+    out_dir = f'{train_checkpoints_dir}/{checkpoint}'
+    
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir)
+
+    model.save_weights(f'{out_dir}/model_weights')
 
 def process_sample_images(model, checkpoint):
     """ processes images in the '.data/model_sample_inputs' directory through the model, each with 5 samples """
 
     for img in os.listdir(sample_inputs_dir):
+        log(f'[ckpt={checkpoint}] process sample {img}')
+
         try:
             x = PIL.Image.load(f'{sample_inputs_dir}/{img}')
             x = preprocess_pil_image(x)
@@ -84,7 +111,8 @@ def process_sample_images(model, checkpoint):
                 y = postprocess_pil_image(x)
                 y.save(f'{out_dir}/{i}.png')
                 y.close()
-        except:
+        except e:
+            log(f'[ckpt={checkpoint}] exception processing sample {img}: {e}')
             pass
 
 def preprocess_pil_image(img):
