@@ -1,74 +1,102 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-import numpy as np
-import tensorflow as tf
 from tensorflow import keras
-import PIL
-
-model_weights_path = '.data/fractal_model.data'
-
-def load_image(infilename) :
-    img = PIL.Image.open(infilename)
-    img.load()
-    data = np.asarray(img, dtype="uint8")
-    return (data.astype(dtype="float32") / 255.0)
-
-def save_image(npdata, outfilename):
-    npdata = np.asarray(np.clip(npdata * 255, 0, 255), dtype="uint8")
-    img = PIL.Image.fromarray(npdata, "RGB")
-    img.save(outfilename)
 
 def build_model():
-    model = tf.keras.Sequential([
-        keras.layers.InputLayer(input_shape=(1081, 1920, 3)),
-        keras.layers.Conv2D(filters=16, kernel_size=(3, 3), strides=(1, 1), padding='same'),
-        keras.layers.Dense(16),
-        keras.layers.Conv2D(filters=32, kernel_size=(3, 3), strides=(1, 1), padding='same'),
-        keras.layers.Dense(32),
-        keras.layers.Dense(3)
-        # keras.layers.Conv2D(filters=3, kernel_size=(3, 3), strides=(1, 1), padding='same', input_shape=(1081, 1920, 3)),
-        # keras.layers.Dense(64, activation='relu'),
-        # 
+    def dropout(rate):
+        return keras.layers.Dropout(rate)
+
+    def conv2d(filter_ct):
+        return keras.layers.Conv2D(filters=filter_ct, kernel_size=(3, 3), strides=(1, 1), padding='same', activation='relu')
+
+    def pool2d():
+        return keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2), padding='same')
+
+    def deconv2d(filter_ct, output_padding=None):
+        return keras.layers.Conv2DTranspose(filters=filter_ct, kernel_size=(5, 5), strides=(2, 2), padding='same', output_padding=output_padding)
+
+    model = keras.Sequential([
+        keras.layers.InputLayer(input_shape=(1080, 1920, 3)),
+
+        # in [None, 1080, 1920, 3]
+        conv2d(64),
+
+        # in [None, 1080, 1920, 64]
+        pool2d(),
+
+        # in [None, 540, 960, 64]
+        conv2d(128),
+        dropout(0.15),
+
+        # in [None, 540, 960, 128]
+        pool2d(),
+
+        # in [None, 270, 480, 128]
+        conv2d(256),
+
+        # in [None, 270, 480, 256]
+        pool2d(),
+
+        # in [None, 135, 240, 256]
+        conv2d(512),
+        dropout(0.15),
+
+        # in [None, 135, 240, 512]
+        pool2d(),
+
+        # in [None, 68, 120, 512]
+        conv2d(1024),
+
+        # in [None, 68, 120, 1024]
+        pool2d(),
+        
+        # in [None, 34, 60, 1024]
+        conv2d(2048),
+        dropout(0.15),
+
+        # in [None, 34, 60, 2048]
+        pool2d(),
+        
+        # in [None, 17, 30, 2048]
+        conv2d(4096),
+
+        # in [None, 17, 30, 4096]
+        pool2d(),
+
+        # in [None, 9, 15, 4096]
+        keras.layers.Dense(4096),
+
+        # in [None, 9, 15, 4096]
+        keras.layers.Dense(2048),
+        dropout(0.15),
+
+        # in [None, 9, 15, 2048]
+        keras.layers.Dense(4096),
+        
+        # in [None, 9, 15, 4096]
+        deconv2d(2048, output_padding=(0, 1)),
+
+        # in [None, 17, 30, 2048]
+        deconv2d(1024),
+        dropout(0.15),
+
+        # in [None, 34, 60, 1024]
+        deconv2d(512),
+
+        # in [None, 68, 120, 512]
+        deconv2d(256, output_padding=(0, 1)),
+
+        # in [None, 135, 240, 256]
+        deconv2d(128),
+
+        # in [None, 270, 480, 128]
+        deconv2d(64),
+
+        # in [None, 540, 960, 64]
+        deconv2d(3)
+
+        # out [None, 1080, 1920, 3]
     ])
 
     model.compile(optimizer='adam', loss='categorical_crossentropy')
 
     return model
-
-def train():
-    def iterate_train_paths():
-        num_imgs = 1
-        for i in range(0, num_imgs):
-            index = i
-            image_path = f'.data/imgs/f-{i}.png'
-
-            next_index = i + 1
-            next_image_path = f'.data/imgs/f-{next_index}.png'
-            yield (image_path, next_image_path)
-
-    model = build_model()
-
-    x = np.array([load_image(cur) for cur, nxt in iterate_train_paths()])
-    y = np.array([load_image(nxt) for cur, nxt in iterate_train_paths()])
-
-    for i in range(0, 100):
-        model.fit(x, y, epochs=10)
-        print('saving...')
-        model.save(model_weights_path)
-
-def apply(src_img, iters=15):
-    model = build_model()
-    model.load_weights(model_weights_path)
-
-    x = load_image(src_img).reshape([1, 1081, 1920, 3])
-    
-    for i in range(0, iters):
-        y = model.predict(x)
-        save_image(y.reshape([1081, 1920, 3]), f'.data/gen/gen_sample{i}.png')
-        x = y
-
-if __name__ == '__main__':
-    #train()
-    apply(".data/gen/original_sample.png")
-

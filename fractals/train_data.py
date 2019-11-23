@@ -14,6 +14,18 @@ if not os.path.exists('.data'):
 if not os.path.exists('.data/train_img_cache'):
     os.mkdir('.data/train_img_cache')
 
+ratio = 9.0 / 16.0
+start_x = -2.3
+end_x = start_x * -1.
+start_y = start_x * ratio
+end_y = end_x * ratio
+width = 1920 # image width
+step = (end_x - start_x) / width
+Y, X = np.mgrid[start_y:end_y:step, start_x:end_x:step]
+Z = X + 1j * Y
+        
+tfmodel = FractalGenTensorflowModel(Z.shape, Z.dtype)
+
 class TrainData():
     _all_bg_ratios = [
         (1.0, 1.0, 1.0),
@@ -60,18 +72,6 @@ class TrainData():
         theta = 2 * np.pi * theta_iter / THETA_BOUNDS
         c = self._all_cs[c_ind](theta)
 
-        ratio = 9.0 / 16.0
-        start_x = -2.3
-        end_x = start_x * -1.
-        start_y = start_x * ratio
-        end_y = end_x * ratio
-        width = 1920 # image width
-        step = (end_x - start_x) / width
-        Y, X = np.mgrid[start_y:end_y:step, start_x:end_x:step]
-        Z = X + 1j * Y
-        
-        tfmodel = FractalGenTensorflowModel(Z.shape, Z.dtype)
-        
         result_img = tfmodel.generate_image(Z, c, bg_ratio, (0.9, 0.9, 0.9))
 
         result_img.save(self._get_image_path(theta_iter, bg_ratio_ind, bg_ratio_shuffle, c_ind))
@@ -79,13 +79,14 @@ class TrainData():
         return result_img
 
     def _get_image_path(self, theta_iter, bg_ratio_ind, bg_ratio_shuffle, c_ind):
-        return f'.data/train_img_cache/{bg_ratio_ind}-{bg_ratio_shuffle}-{c_ind}-{theta_iter} .png'
+        return f'.data/train_img_cache/{bg_ratio_ind}-{bg_ratio_shuffle}-{c_ind}-{theta_iter}.png'
 
     def get_train_image(self):
         fname = self._get_image_path(self._theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
 
         if not os.path.exists(fname):
-            return self._cache_train_image(self._theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
+            img = self._cache_train_image(self._theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
+            return img
         else:
             return Image.load(fname)
 
@@ -94,7 +95,8 @@ class TrainData():
         fname = self._get_image_path(next_theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
 
         if not os.path.exists(fname):
-            return self._cache_train_image(next_theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
+            img = self._cache_train_image(next_theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
+            return img
         else:
             return Image.load(fname)
 
