@@ -1,5 +1,6 @@
 import os
 import datetime
+import logging
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
@@ -10,6 +11,8 @@ import PIL
 from train_data import TrainData
 from fractal_gen import FractalGenTensorflowModel
 from fractal_model import build_model
+
+logging.basicConfig(filename='.data/log.txt', filemode='a', format='[%(asctime)s] %(message)s', level=logging.INFO)
 
 tensorboard_dir = '.data\\tensorboard'
 train_checkpoints_dir = '.data/model_checkpoints'
@@ -33,24 +36,15 @@ if not os.path.exists(sample_inputs_dir):
 if not os.path.exists(sample_outputs_dir):
     os.mkdir(sample_outputs_dir)
 
-def log(m):
-
-    m = f'[{datetime.datetime.now()}] {m}'
-
-    print(m)
-
-    with open(".data/log.txt", "a") as myfile:
-        myfile.write(f'{m}\n')
-
 def main():
     model = build_model()
 
     last_checkpoint = get_latest_model_checkpoint()
+    current_checkpoint = 1
 
     if last_checkpoint:
-        model.load_weights(f'{train_checkpoints_dir}/{last_checkpoint}/model_weights')
-
-    current_checkpoint = (last_checkpoint + 1) or 1
+        current_checkpoint = last_checkpoint + 1
+        model.load_weights(f'{train_checkpoints_dir}/{last_checkpoint}/model_weights')    
 
     while True:
         process_checkpoint(model, current_checkpoint)
@@ -64,17 +58,17 @@ def get_latest_model_checkpoint():
         return int(ld[-1])
 
 def process_checkpoint(model, checkpoint):
-    log(f'process checkpoint (ckpt) {checkpoint}')
+    logging.info(f'process checkpoint (ckpt) {checkpoint}')
 
     td = TrainData.get_random()
     
-    log(f'[ckpt={checkpoint}] get feature image')
+    logging.info(f'[ckpt={checkpoint}] get feature image')
     feature = preprocess_pil_image(td.get_train_image())
     
-    log(f'[ckpt={checkpoint}] get label image')
+    logging.info(f'[ckpt={checkpoint}] get label image')
     label = preprocess_pil_image(td.get_next_train_image())
 
-    log(f'[ckpt={checkpoint}] fit model')
+    logging.info(f'[ckpt={checkpoint}] fit model')
     model.fit(feature, label, callbacks=[tb_callback])
 
     if checkpoint % 20 == 0:
@@ -95,7 +89,7 @@ def process_sample_images(model, checkpoint):
     """ processes images in the '.data/model_sample_inputs' directory through the model, each with 5 samples """
 
     for img in os.listdir(sample_inputs_dir):
-        log(f'[ckpt={checkpoint}] process sample {img}')
+        logging.info(f'[ckpt={checkpoint}] process sample {img}')
 
         try:
             x = PIL.Image.load(f'{sample_inputs_dir}/{img}')
@@ -111,8 +105,8 @@ def process_sample_images(model, checkpoint):
                 y = postprocess_pil_image(x)
                 y.save(f'{out_dir}/{i}.png')
                 y.close()
-        except e:
-            log(f'[ckpt={checkpoint}] exception processing sample {img}: {e}')
+        except Exception as e:
+            logging.error(f'[ckpt={checkpoint}] exception processing sample {img}', exc_info=True)
             pass
 
 def preprocess_pil_image(img):
