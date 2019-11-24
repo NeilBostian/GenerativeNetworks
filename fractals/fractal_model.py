@@ -95,6 +95,6 @@ def build_model():
         # out [None, 1080, 1920, 3]
     ])
 
-    model.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0003), loss='categorical_crossentropy')
+    model.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0001), loss='categorical_crossentropy')
 
     return model

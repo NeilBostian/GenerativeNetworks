@@ -84,12 +84,16 @@ def process_checkpoint(model, checkpoint):
         process_sample_images(model, checkpoint)
 
 def save_checkpoint(model, checkpoint):
+    logging.info(f'[ckpt={checkpoint}] saving model weights')
+
     out_dir = f'{train_checkpoints_dir}/{checkpoint}'
     
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
 
     model.save_weights(f'{out_dir}/model_weights')
+
+    logging.info(f'[ckpt={checkpoint}] model weights saved')
 
 def process_sample_images(model, checkpoint):
     """ processes images in the '.data/model_sample_inputs' directory through the model, each with 5 samples """
@@ -110,7 +114,7 @@ def process_sample_images(model, checkpoint):
                     os.mkdir(out_dir)
 
                 y = postprocess_pil_image(x)
-                y.save(f'{out_dir}/{i}.png')
+                y.save(f'{out_dir}/{checkpoint}-{i}.png')
                 y.close()
         except Exception as e:
             logging.error(f'[ckpt={checkpoint}] exception processing sample {img}', exc_info=True)

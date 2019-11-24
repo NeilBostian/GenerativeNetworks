@@ -6,3 +6,4 @@ Heavily modified version of the code [located here](https://github.com/hzy46/ten
     conda activate fractals
     conda install tensorflow-gpu=1.14.0
     conda install pillow=6.2.0
+    conda install opencv=3.4.2
