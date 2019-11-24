@@ -99,23 +99,27 @@ def process_sample_images(model, checkpoint):
     """ processes images in the '.data/model_sample_inputs' directory through the model, each with 5 samples """
 
     for img in os.listdir(sample_inputs_dir):
+        out_dir = f'{sample_outputs_dir}/{img}'
+        if not os.path.exists(out_dir):
+            os.mkdir(out_dir)
+
         logging.info(f'[ckpt={checkpoint}] process sample {img}')
 
         try:
             x = PIL.Image.open(f'{sample_inputs_dir}/{img}')
             x.load()
+            x.save(f'{out_dir}/{checkpoint}-0.png')
+
             x = preprocess_pil_image(x)
 
             for i in range(1, 6):
                 x = model.predict(x)
 
-                out_dir = f'{sample_outputs_dir}/{img}'
-                if not os.path.exists(out_dir):
-                    os.mkdir(out_dir)
-
                 y = postprocess_pil_image(x)
                 y.save(f'{out_dir}/{checkpoint}-{i}.png')
                 y.close()
+
+                logging.info(f'[ckpt={checkpoint}] process sample {img} completed {i}/5')
         except Exception as e:
             logging.error(f'[ckpt={checkpoint}] exception processing sample {img}', exc_info=True)
             pass
@@ -123,14 +127,14 @@ def process_sample_images(model, checkpoint):
 def preprocess_pil_image(img):
     """ Preprocess PIL image into the input data type for our keras model """
     data = np.asarray(img, dtype=np.uint8)
-    data = np.reshape((data.astype(dtype="float32") / 255.0), [1, 1080, 1920, 3])
+    data = np.reshape((data.astype(dtype=np.float32) / 255.0), [1, 1080, 1920, 3])
     img.close()
     return data
 
 def postprocess_pil_image(npdata):
     """ Postprocess output data from our keras model into a PIL image """
-    npdata = np.asarray(np.clip(npdata * 255, 0, 255), dtype="uint8")
-    return PIL.Image.fromarray(npdata, "RGB")
+    npdata = np.asarray(np.clip(npdata[0] * 255, 0, 255), dtype=np.uint8)
+    return PIL.Image.fromarray(npdata, 'RGB')
 
 if __name__ == '__main__':
     main()
