@@ -57,7 +57,7 @@ def main():
         current_checkpoint += 1
 
 def get_latest_model_checkpoint():
-    ld = list(os.listdir(train_checkpoints_dir))
+    ld = [int(x) for x in os.listdir(train_checkpoints_dir)]
     ld.sort()
 
     if len(ld) > 0:
