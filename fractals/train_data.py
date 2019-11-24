@@ -116,4 +116,9 @@ class TrainData():
         c_ind = random.randint(0, len(TrainData._all_cs) - 1)
 
         return TrainData(theta_iter, bg_ratio_ind, bg_ratio_shuffle, c_ind)
-        
+
+def process_cache():
+    while True:
+        t = TrainData.get_random()
+        t.get_train_image().close()
+        t.get_next_train_image().close()
