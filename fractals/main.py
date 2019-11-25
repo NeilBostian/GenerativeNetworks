@@ -100,6 +100,8 @@ class TrainProcessor():
 
         if (epoch % 50) == 0:
             self._save_model_checkpoint()
+
+        if (epoch % 10) == 0:
             self._process_sample_images()
 
         self._current_epoch += 1
