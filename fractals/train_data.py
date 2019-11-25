@@ -47,18 +47,18 @@ class TrainData():
     ]
 
     _all_cs = [
-        lambda theta: -(0.835 - 0.05 * np.cos(theta)) - (0.2321 + 0.05 * np.sin(theta)) * 1j,
-        lambda theta: -(0.835 - 0.03 * np.cos(theta)) - (0.2321 + 0.08 * np.sin(theta)) * 1j,
-        lambda theta: -(0.835 - 0.01 * np.cos(theta)) - (0.2321 + 0.11 * np.sin(theta)) * 1j,
-        lambda theta: -(0.835 - 0.05 * np.sin(theta)) - (0.2321 + 0.05 * np.cos(theta)) * 1j,
-        lambda theta: -(0.835 - 0.03 * np.sin(theta)) - (0.2321 + 0.08 * np.cos(theta)) * 1j,
-        lambda theta: -(0.835 - 0.01 * np.sin(theta)) - (0.2321 + 0.11 * np.cos(theta)) * 1j,
-        lambda theta: -(0.805 - 0.05 * np.cos(theta)) - (0.2621 + 0.05 * np.sin(theta)) * 1j,
-        lambda theta: -(0.805 - 0.03 * np.cos(theta)) - (0.2621 + 0.08 * np.sin(theta)) * 1j,
-        lambda theta: -(0.805 - 0.01 * np.cos(theta)) - (0.2621 + 0.11 * np.sin(theta)) * 1j,
-        lambda theta: -(0.805 - 0.05 * np.sin(theta)) - (0.2621 + 0.05 * np.cos(theta)) * 1j,
-        lambda theta: -(0.805 - 0.03 * np.sin(theta)) - (0.2621 + 0.08 * np.cos(theta)) * 1j,
-        lambda theta: -(0.805 - 0.01 * np.sin(theta)) - (0.2621 + 0.11 * np.cos(theta)) * 1j
+        lambda theta: -(0.835 - 0.05 * np.cos(theta)) - (0.2321 + 0.05 * np.sin(theta)) * 1j
+        # lambda theta: -(0.835 - 0.03 * np.cos(theta)) - (0.2321 + 0.08 * np.sin(theta)) * 1j,
+        # lambda theta: -(0.835 - 0.01 * np.cos(theta)) - (0.2321 + 0.11 * np.sin(theta)) * 1j,
+        # lambda theta: -(0.835 - 0.05 * np.sin(theta)) - (0.2321 + 0.05 * np.cos(theta)) * 1j,
+        # lambda theta: -(0.835 - 0.03 * np.sin(theta)) - (0.2321 + 0.08 * np.cos(theta)) * 1j,
+        # lambda theta: -(0.835 - 0.01 * np.sin(theta)) - (0.2321 + 0.11 * np.cos(theta)) * 1j,
+        # lambda theta: -(0.805 - 0.05 * np.cos(theta)) - (0.2621 + 0.05 * np.sin(theta)) * 1j,
+        # lambda theta: -(0.805 - 0.03 * np.cos(theta)) - (0.2621 + 0.08 * np.sin(theta)) * 1j,
+        # lambda theta: -(0.805 - 0.01 * np.cos(theta)) - (0.2621 + 0.11 * np.sin(theta)) * 1j,
+        # lambda theta: -(0.805 - 0.05 * np.sin(theta)) - (0.2621 + 0.05 * np.cos(theta)) * 1j,
+        # lambda theta: -(0.805 - 0.03 * np.sin(theta)) - (0.2621 + 0.08 * np.cos(theta)) * 1j,
+        # lambda theta: -(0.805 - 0.01 * np.sin(theta)) - (0.2621 + 0.11 * np.cos(theta)) * 1j
     ]
 
     def __init__(self, theta_iter, bg_ratio_ind, bg_ratio_shuffle, c_ind):
