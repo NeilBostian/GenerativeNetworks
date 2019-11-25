@@ -98,7 +98,7 @@ class TrainProcessor():
         if np.isnan(loss):
             exit()
 
-        if (epoch % 10) == 0:
+        if (epoch % 50) == 0:
             self._save_model_checkpoint()
             self._process_sample_images()
 
