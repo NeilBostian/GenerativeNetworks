@@ -1,6 +1,7 @@
 import os
 import datetime
 import logging
+import random
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
@@ -49,11 +50,11 @@ class TrainProcessor():
             self._current_epoch = last_checkpoint + 1
             self._model.load_weights(f'{train_checkpoints_dir}/{last_checkpoint}/model_weights')
 
-    def train(self, epochs, steps_per_epoch=12, batch_size=4):
+    def train(self, epochs, batch_size=8):
         all_train_callbacks = [
+            # Disable this for now since it's unnecessary
             # tf.keras.callbacks.TensorBoard(log_dir=tensorboard_dir),
 
-            tf.keras.callbacks.TerminateOnNaN(),
             tf.keras.callbacks.LambdaCallback(
                 on_epoch_begin=lambda epoch_num, logs: self._on_train_epoch_begin(),
                 on_epoch_end=lambda epoch_num, logs: self._on_train_epoch_end(logs['loss'])
@@ -93,6 +94,9 @@ class TrainProcessor():
         epoch = self._current_epoch
 
         logging.info(f'epoch end {epoch}, loss={loss}')
+
+        if np.isnan(loss):
+            exit()
 
         if (epoch % 10) == 0:
             self._save_model_checkpoint()
@@ -153,7 +157,7 @@ class TrainProcessor():
 
                 x = TrainProcessor.preprocess_pil_image(x)
 
-                for i in range(1, 6):
+                for i in range(1, 2):
                     x = model.predict(x)
 
                     y = TrainProcessor.postprocess_pil_image(x)
@@ -181,5 +185,8 @@ if __name__ == '__main__':
     if not os.path.exists(sample_outputs_dir):
         os.mkdir(sample_outputs_dir)
 
+    # arbitrary, but helps test since the early images all get cached
+    # random.seed(1239875123)
+
     proc = TrainProcessor()
-    proc.train(10000)
+    proc.train(10000, batch_size=4)
