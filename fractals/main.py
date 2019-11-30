@@ -3,7 +3,7 @@ import datetime
 import logging
 import random
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 import numpy as np
 import tensorflow as tf
@@ -11,7 +11,7 @@ import PIL
 
 from train_data import TrainData
 from fractal_gen import FractalGenTensorflowModel
-from fractal_model import build_model
+from models_resnet import build_model
 
 logging.basicConfig(
     format='[%(asctime)s][%(levelname)-5.5s] %(message)s',
