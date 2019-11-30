@@ -98,10 +98,8 @@ class TrainProcessor():
         if np.isnan(loss):
             exit()
 
-        if (epoch % 50) == 0:
+        if (epoch % 25) == 0:
             self._save_model_checkpoint()
-
-        if (epoch % 10) == 0:
             self._process_sample_images()
 
         self._current_epoch += 1
@@ -111,7 +109,7 @@ class TrainProcessor():
         labels = []
 
         while True:
-            td = TrainData.get_random()
+            td = TrainData.get_random(logging=False)
             feature = TrainProcessor.preprocess_pil_image(td.get_train_image())
             label = TrainProcessor.preprocess_pil_image(td.get_next_train_image())
 
@@ -187,8 +185,5 @@ if __name__ == '__main__':
     if not os.path.exists(sample_outputs_dir):
         os.mkdir(sample_outputs_dir)
 
-    # arbitrary, but helps test since the early images all get cached
-    # random.seed(1239875123)
-
     proc = TrainProcessor()
-    proc.train(10000, batch_size=4)
+    proc.train(100000, batch_size=4)

@@ -12,6 +12,8 @@ def build_model():
     return model
 
 class ResConv2D(keras.layers.Layer):
+    # Resnet layer as defined http://torch.ch/blog/2016/02/04/resnets.html
+
     def __init__(self):
         super(ResConv2D, self).__init__()
         self._conv1 = keras.layers.Conv2D(filters=1, kernel_size=(3, 3), strides=(1, 1), padding='same')
