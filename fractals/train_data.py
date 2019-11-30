@@ -117,8 +117,21 @@ class TrainData():
 
         return TrainData(theta_iter, bg_ratio_ind, bg_ratio_shuffle, c_ind)
 
-def process_cache():
+    def get_all():
+        for theta_iter in range(0, THETA_BOUNDS):
+            for bg_ratio_ind in range(0, len(TrainData._all_bg_ratios)):
+                for bg_ratio_shuffle in range(0, len(TrainData._all_bg_shuffles)):
+                    for c_ind in range(0, len(TrainData._all_cs)):
+                        yield TrainData(theta_iter, bg_ratio_ind, bg_ratio_shuffle, c_ind)
+
+
+def process_cache_rand():
     while True:
         t = TrainData.get_random()
+        t.get_train_image().close()
+        t.get_next_train_image().close()
+
+def process_cache_seq():
+    for t in TrainData.get_all():
         t.get_train_image().close()
         t.get_next_train_image().close()
