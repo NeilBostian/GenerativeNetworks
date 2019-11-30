@@ -61,11 +61,12 @@ class TrainData():
         # lambda theta: -(0.805 - 0.01 * np.sin(theta)) - (0.2621 + 0.11 * np.cos(theta)) * 1j
     ]
 
-    def __init__(self, theta_iter, bg_ratio_ind, bg_ratio_shuffle, c_ind):
+    def __init__(self, theta_iter, bg_ratio_ind, bg_ratio_shuffle, c_ind, logging=True):
         self._theta_iter = theta_iter
         self._bg_ratio_ind = bg_ratio_ind
         self._bg_ratio_shuffle = bg_ratio_shuffle
         self._c_ind = c_ind
+        self._logging = logging
 
     def _cache_train_image(self, theta_iter, bg_ratio_ind, bg_ratio_shuffle, c_ind):
         bg_ratio = tuple([self._all_bg_ratios[bg_ratio_ind][x] for x in self._all_bg_shuffles[bg_ratio_shuffle]])
@@ -86,11 +87,11 @@ class TrainData():
         fname = self._get_image_path(self._theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
 
         if not os.path.exists(fname):
-            logging.info(f'image does not exist, creating from fractal_gen: {fname}')
+            if self._logging: logging.info(f'image does not exist, creating from fractal_gen: {fname}')
             img = self._cache_train_image(self._theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
             return img
         else:
-            logging.info(f'image exists, using cached version: {fname}')
+            if self._logging: logging.info(f'image exists, using cached version: {fname}')
             img = Image.open(fname)
             img.load()
             return img
@@ -100,22 +101,22 @@ class TrainData():
         fname = self._get_image_path(next_theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
 
         if not os.path.exists(fname):
-            logging.info(f'image does not exist, creating from fractal_gen: {fname}')
+            if self._logging: logging.info(f'image does not exist, creating from fractal_gen: {fname}')
             img = self._cache_train_image(next_theta_iter, self._bg_ratio_ind, self._bg_ratio_shuffle, self._c_ind)
             return img
         else:
-            logging.info(f'image exists, using cached version: {fname}')
+            if self._logging: logging.info(f'image exists, using cached version: {fname}')
             img = Image.open(fname)
             img.load()
             return img
 
-    def get_random():
+    def get_random(logging=True):
         theta_iter = random.randint(0, THETA_BOUNDS - 1)
         bg_ratio_ind = random.randint(0, len(TrainData._all_bg_ratios) - 1)
         bg_ratio_shuffle = random.randint(0, len(TrainData._all_bg_shuffles) - 1)
         c_ind = random.randint(0, len(TrainData._all_cs) - 1)
 
-        return TrainData(theta_iter, bg_ratio_ind, bg_ratio_shuffle, c_ind)
+        return TrainData(theta_iter, bg_ratio_ind, bg_ratio_shuffle, c_ind, logging)
 
     def get_all():
         for theta_iter in range(0, THETA_BOUNDS):
