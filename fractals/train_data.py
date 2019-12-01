@@ -110,6 +110,18 @@ class TrainData():
             img.load()
             return img
 
+    def preprocess_pil_image(img):
+        """ Preprocess PIL image into the input data type for our keras model """
+        data = np.asarray(img, dtype=np.uint8)
+        data = np.reshape((data.astype(dtype=np.float32) / 255.0), [1, 1080, 1920, 3])
+        img.close()
+        return data
+
+    def postprocess_pil_image(npdata):
+        """ Postprocess output data from our keras model into a PIL image """
+        npdata = np.asarray(np.clip(npdata[0] * 255, 0, 255), dtype=np.uint8)
+        return Image.fromarray(npdata, 'RGB')
+
     def get_random(logging=True):
         theta_iter = random.randint(0, THETA_BOUNDS - 1)
         bg_ratio_ind = random.randint(0, len(TrainData._all_bg_ratios) - 1)
