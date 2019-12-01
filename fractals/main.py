@@ -98,7 +98,7 @@ class TrainProcessor():
         if np.isnan(loss):
             exit()
 
-        if (epoch % 25) == 0:
+        if (epoch % 500) == 0:
             self._save_model_checkpoint()
             self._process_sample_images()
 
@@ -156,15 +156,15 @@ class TrainProcessor():
                 x.save(f'{out_dir}/{epoch}-0.png')
 
                 x = TrainProcessor.preprocess_pil_image(x)
-
-                for i in range(1, 2):
+                max_iters = 10
+                for i in range(1, max_iters + 1):
                     x = model.predict(x)
 
                     y = TrainProcessor.postprocess_pil_image(x)
                     y.save(f'{out_dir}/{epoch}-{i}.png')
                     y.close()
 
-                    logging.info(f'process sample {img} completed {i}/5')
+                    logging.info(f'process sample {img} completed {i}/{max_iters}')
             except Exception as e:
                 logging.error(f'exception processing sample {img}', exc_info=True)
                 pass
@@ -186,4 +186,19 @@ if __name__ == '__main__':
         os.mkdir(sample_outputs_dir)
 
     proc = TrainProcessor()
-    proc.train(100000, batch_size=4)
+    proc.train(100000, batch_size=1)
+
+    # model = proc._model
+
+    # x = PIL.Image.open(f'.data/model_sample_inputs/tree.png')
+    # x.load()
+
+    # x = TrainProcessor.preprocess_pil_image(x)
+
+    # for i in range(0, 2000):
+    #     print(f'iter {i}')
+    #     x = model.predict(x)
+
+    #     y = TrainProcessor.postprocess_pil_image(x)
+    #     y.save(f'.data/gen/{i}.png')
+    #     y.close()
